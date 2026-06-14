@@ -1,5 +1,29 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from "firebase/app";
+import { 
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
+  sendPasswordResetEmail, signOut, onAuthStateChanged 
+} from "firebase/auth";
+import { 
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot 
+} from "firebase/firestore";
 
+// --- CONFIGURAÇÃO DO FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDlnaN0rfER6AAOBYJJ_uvsZN5LhtnR08k",
+  authDomain: "ld-financas.firebaseapp.com",
+  projectId: "ld-financas",
+  storageBucket: "ld-financas.firebasestorage.app",
+  messagingSenderId: "624668062422",
+  appId: "1:624668062422:web:ef3c197c249d0952e44f77"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const APP_ID = 'ld-financas';
+
+// --- ÍCONES (Material Symbols) ---
 const IconWrapper = ({ name, size = 24, className = '' }) => (
   <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>{name}</span>
 );
@@ -29,10 +53,11 @@ const AlertTriangle = (p) => <IconWrapper name="warning" {...p} />;
 const Lock = (p) => <IconWrapper name="lock" {...p} />;
 const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
 
-const APP_NAME = "LD Finanças";
+// --- CONFIGURAÇÕES DO SISTEMA ---
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
+// --- UTILITÁRIOS ---
 const formatNumber = (value) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 const formatDate = (dateString) => {
@@ -42,12 +67,13 @@ const formatDate = (dateString) => {
 };
 const capitalizeFirstLetter = (string) => string ? string.charAt(0).toUpperCase() + string.slice(1).toLowerCase() : "";
 
+// --- COMPONENTES BÁSICOS ---
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden ${className}`}>{children}</div>
 );
 
-const Button = ({ children, onClick, variant = 'primary', className = '', type = 'button', icon: Icon }) => {
-  const baseStyle = "font-medium rounded-xl px-4 py-3 transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto active:scale-[0.98]";
+const Button = ({ children, onClick, variant = 'primary', className = '', type = 'button', icon: Icon, disabled = false }) => {
+  const baseStyle = "font-medium rounded-xl px-4 py-3 transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
     secondary: "bg-slate-100 text-slate-700 hover:bg-slate-200",
@@ -55,7 +81,7 @@ const Button = ({ children, onClick, variant = 'primary', className = '', type =
     outline: "border-2 border-slate-200 text-slate-600 hover:border-emerald-600 hover:text-emerald-600"
   };
   return (
-    <button type={type} onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`}>
+    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
       {Icon && <Icon size={18} />}{children}
     </button>
   );
@@ -94,37 +120,84 @@ const Select = ({ label, name, value, onChange, options, required = false }) => 
   </div>
 );
 
-const Auth = ({ onLogin }) => {
+// --- TELA DE LOGIN E CADASTRO REAL ---
+const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
   const [formData, setFormData] = useState({ name: '', whatsapp: '', email: '', password: '' });
 
-  const handleSubmit = (e) => {
+  const showMsg = (text, type = 'error') => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage({ type: '', text: '' }), 5000);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onLogin({
-      name: isLogin ? 'Paulo Sérgio Diniz' : formData.name || 'Novo Usuário',
-      email: formData.email,
-      plan: formData.email === ADMIN_EMAIL ? 'Admin' : 'Pro',
-      daysRemaining: formData.email === ADMIN_EMAIL ? 999 : 30
-    });
+    setLoading(true);
+    try {
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      } else {
+        const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+        const user = userCred.user;
+        // Salva os dados extras do utilizador na base de dados
+        await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), {
+          name: formData.name || 'Novo Usuário',
+          whatsapp: formData.whatsapp,
+          email: formData.email,
+          plan: formData.email === ADMIN_EMAIL ? 'Admin' : 'Free',
+          daysRemaining: formData.email === ADMIN_EMAIL ? 999 : 30,
+          status: 'Ativo',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      let erroMsg = "Ocorreu um erro.";
+      if (error.code === 'auth/email-already-in-use') erroMsg = "Este e-mail já está em uso.";
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') erroMsg = "E-mail ou senha incorretos.";
+      if (error.code === 'auth/weak-password') erroMsg = "A senha deve ter pelo menos 6 caracteres.";
+      showMsg(erroMsg, 'error');
+    }
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!formData.email) return showMsg("Digite o seu e-mail no campo acima primeiro.", "error");
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, formData.email);
+      showMsg("E-mail de recuperação enviado! Verifique a sua caixa de entrada.", "success");
+    } catch (error) {
+      showMsg("Erro ao enviar e-mail. Verifique se digitou corretamente.", "error");
+    }
+    setLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md animate-in fade-in zoom-in-95 duration-500 border border-slate-100">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
            <div className="flex items-center justify-center gap-2 font-black text-2xl text-slate-800 tracking-tight mb-2">
              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS
            </div>
            <h2 className="text-2xl font-bold text-slate-800">{isLogin ? 'Bem-vindo de volta' : 'Criar Conta'}</h2>
-           <p className="text-slate-500 text-sm mt-1">Controle suas finanças de onde estiver.</p>
+           <p className="text-slate-500 text-sm mt-1">Controle as suas finanças de onde estiver.</p>
         </div>
+
+        {message.text && (
+          <div className={`p-3 rounded-lg text-sm font-medium mb-4 text-center ${message.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            {message.text}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
            {!isLogin && (
              <div className="animate-in slide-in-from-top-2 duration-300">
                <Input label="Seu Nome Completo" name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: João Silva" required={!isLogin} />
-               <Input label="WhatsApp (com DDD)" name="whatsapp" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="Ex: 64999999999" required={!isLogin} />
+               <Input label="WhatsApp (com DDD)" name="whatsapp" type="tel" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="Ex: 64999999999" required={!isLogin} />
              </div>
            )}
            
@@ -143,19 +216,19 @@ const Auth = ({ onLogin }) => {
 
            {isLogin && (
              <div className="flex justify-end mt-[-8px] mb-4">
-               <a href="#" onClick={(e) => e.preventDefault()} className="text-sm font-medium text-emerald-600 hover:text-emerald-700">Esqueci minha senha</a>
+               <button type="button" onClick={handleForgotPassword} className="text-sm font-medium text-emerald-600 hover:text-emerald-700">Esqueci a minha senha</button>
              </div>
            )}
 
-           <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm mt-4 active:scale-[0.98]">
-             {isLogin ? 'Entrar' : 'Cadastrar'}
+           <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm mt-4 active:scale-[0.98]">
+             {loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Cadastrar')}
            </button>
         </form>
 
         <div className="mt-8 text-center pt-6 border-t border-slate-100">
           <p className="text-sm text-slate-600">
             {isLogin ? "Ainda não tem conta? " : "Já tem conta? "}
-            <button type="button" onClick={() => {setIsLogin(!isLogin); setFormData({ name: '', whatsapp: '', email: '', password: '' });}} className="font-bold text-emerald-600 hover:text-emerald-700">
+            <button type="button" onClick={() => {setIsLogin(!isLogin); setMessage({type:'', text:''});}} className="font-bold text-emerald-600 hover:text-emerald-700">
               {isLogin ? "Crie uma agora." : "Faça login."}
             </button>
           </p>
@@ -165,44 +238,74 @@ const Auth = ({ onLogin }) => {
   );
 }
 
-function DashboardApp({ currentUser, onLogout }) {
+// --- PAINEL PRINCIPAL (DASHBOARD REAL) ---
+function DashboardApp({ userProfile }) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState(currentUser);
 
-  // DADOS LIMPOS PARA INICIAR NOVO BANCO
+  // Estados dos Dados que virão do Firebase
+  const [transactions, setTransactions] = useState([]);
   const [incomeCategories, setIncomeCategories] = useState(['Outros']);
   const [expenseCategories, setExpenseCategories] = useState(['Outros']);
-  const [transactions, setTransactions] = useState([]);
-  
-  const [adminUsers, setAdminUsers] = useState([
-    { id: '#001', name: 'João Silva Consultoria', email: 'joao@exemplo.com', whatsapp: '64 99999-9999', plan: 'PRO', daysRemaining: 12, status: 'Ativo' }
-  ]);
+  const [adminUsers, setAdminUsers] = useState([]);
 
-  const [filterPeriod, setFilterPeriod] = useState('all'); 
+  // Filtros
+  const [filterPeriod, setFilterPeriod] = useState('month'); 
   const [filterCategory, setFilterCategory] = useState('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
 
+  // Modais e Formulários
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({
-    amount: '', type: 'income', date: new Date().toISOString().split('T')[0],
-    category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0]
-  });
-
+  const [formData, setFormData] = useState({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
+  // BUSCA DADOS DO FIREBASE EM TEMPO REAL
+  useEffect(() => {
+    if (!userProfile?.uid) return;
+
+    // Puxa Lançamentos
+    const txRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions');
+    const unsubTx = onSnapshot(txRef, (snapshot) => {
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setTransactions(data);
+    }, (error) => console.error(error));
+
+    // Puxa Categorias
+    const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
+    const unsubCat = onSnapshot(catRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setIncomeCategories(data.income || ['Outros']);
+            setExpenseCategories(data.expense || ['Outros']);
+        } else {
+            // Cria arquivo de categorias padrão
+            setDoc(catRef, { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] });
+        }
+    }, (error) => console.error(error));
+
+    // Se for ADMIN, puxa todos os clientes
+    let unsubUsers = () => {};
+    if (userProfile.email === ADMIN_EMAIL) {
+        const usersRef = collection(db, 'artifacts', APP_ID, 'users');
+        unsubUsers = onSnapshot(usersRef, (snapshot) => {
+             const data = snapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
+             setAdminUsers(data);
+        });
+    }
+
+    return () => { unsubTx(); unsubCat(); unsubUsers(); }
+  }, [userProfile?.uid]);
+
   const handleLogout = () => {
-    openConfirm('Sair do Sistema', 'Tem certeza que deseja encerrar sua sessão?', () => {
-      localStorage.clear();
-      sessionStorage.clear();
+    openConfirm('Sair do Sistema', 'Tem certeza que deseja encerrar a sua sessão?', () => {
+      signOut(auth);
       closeConfirm();
-      onLogout(); 
     });
   };
 
@@ -212,13 +315,12 @@ function DashboardApp({ currentUser, onLogout }) {
       let customDesc = '';
       const match = cat.match(/^(.*) \((.*)\)$/);
       if (match && match[1].toLowerCase().includes('outros')) {
-        cat = match[1];
-        customDesc = match[2];
+        cat = match[1]; customDesc = match[2];
       }
       setFormData({ amount: transaction.amount, type: transaction.type, date: transaction.date, category: cat, customDescription: customDesc, paymentMethod: transaction.paymentMethod });
       setEditingId(transaction.id);
     } else {
-      setFormData({ amount: '', type: 'income', date: new Date().toISOString().split('T')[0], category: incomeCategories[0] || '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
+      setFormData({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: expenseCategories[0] || '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
       setEditingId(null);
     }
     setIsModalOpen(true);
@@ -226,16 +328,10 @@ function DashboardApp({ currentUser, onLogout }) {
 
   const handleCloseModal = () => { setIsModalOpen(false); setEditingId(null); };
 
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  const handleFormChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleTypeToggle = (newType) => setFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (incomeCategories[0] || '') : (expenseCategories[0] || ''), customDescription: '' }));
 
-  const handleTypeToggle = (newType) => {
-    setFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (incomeCategories[0] || '') : (expenseCategories[0] || ''), customDescription: '' }));
-  };
-
-  const handleSaveTransaction = (e) => {
+  const handleSaveTransaction = async (e) => {
     e.preventDefault();
     if (!formData.category || !formData.amount) return;
     
@@ -244,40 +340,28 @@ function DashboardApp({ currentUser, onLogout }) {
        finalCategory = `${formData.category} (${formData.customDescription.trim()})`;
     }
     
-    // Tratamento exato de precisão e conversão de vírgula para ponto
-    let amountStr = formData.amount.toString().trim();
-    amountStr = amountStr.replace(/[^\d.,]/g, '');
-    
-    if (amountStr.includes(',')) {
-        amountStr = amountStr.replace(/\./g, '');
-        amountStr = amountStr.replace(',', '.'); 
-    }
-    
-    let parsedAmount = parseFloat(amountStr);
-    if (isNaN(parsedAmount)) parsedAmount = 0;
-    // TRAVA MATEMÁTICA DEFINITIVA
+    let amountStr = formData.amount.toString().trim().replace(/[^\d.,]/g, '');
+    if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
+    let parsedAmount = parseFloat(amountStr) || 0;
     let finalAmount = Math.round(parsedAmount * 100) / 100;
 
+    const idToSave = editingId || Date.now().toString();
     const newTx = { 
-        id: editingId || Date.now().toString(), 
-        amount: finalAmount, 
-        type: formData.type, 
-        date: formData.date, 
-        category: finalCategory, 
-        paymentMethod: formData.paymentMethod 
+        amount: finalAmount, type: formData.type, date: formData.date, 
+        category: finalCategory, paymentMethod: formData.paymentMethod, updatedAt: new Date().toISOString()
     };
     
-    if (editingId) {
-        setTransactions(prev => prev.map(t => t.id === editingId ? newTx : t));
-    } else {
-        setTransactions(prev => [newTx, ...prev]);
-    }
+    // SALVAR NO FIREBASE
+    const txRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', idToSave);
+    await setDoc(txRef, newTx);
+    
     handleCloseModal();
   };
 
   const requestDeleteTransaction = (id) => {
-    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita e afetará seu saldo geral.', () => {
-        setTransactions(prev => prev.filter(t => t.id !== id));
+    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? Isso afetará o seu saldo.', async () => {
+        // DELETAR DO FIREBASE
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
         closeConfirm();
     });
   };
@@ -286,40 +370,40 @@ function DashboardApp({ currentUser, onLogout }) {
     setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
   };
 
-  const handleSaveCategory = (e) => {
+  const handleSaveCategory = async (e) => {
     e.preventDefault();
     const { originalName, currentName, type } = categoryModal;
     const trimmedName = currentName.trim();
     if (!trimmedName) return;
+    
+    let updatedIncomes = [...incomeCategories];
+    let updatedExpenses = [...expenseCategories];
+
     if (type === 'income') {
-      if (originalName) {
-        setIncomeCategories(prev => prev.map(c => c === originalName ? trimmedName : c));
-        setTransactions(prev => prev.map(t => (t.type === 'income' && t.category === originalName) ? { ...t, category: trimmedName } : t));
-      } else {
-        if (!incomeCategories.includes(trimmedName)) setIncomeCategories(prev => [...prev, trimmedName]);
-      }
+      if (originalName) updatedIncomes = updatedIncomes.map(c => c === originalName ? trimmedName : c);
+      else if (!updatedIncomes.includes(trimmedName)) updatedIncomes.push(trimmedName);
     } else {
-      if (originalName) {
-        setExpenseCategories(prev => prev.map(c => c === originalName ? trimmedName : c));
-        setTransactions(prev => prev.map(t => (t.type === 'expense' && t.category === originalName) ? { ...t, category: trimmedName } : t));
-      } else {
-        if (!expenseCategories.includes(trimmedName)) setExpenseCategories(prev => [...prev, trimmedName]);
-      }
+      if (originalName) updatedExpenses = updatedExpenses.map(c => c === originalName ? trimmedName : c);
+      else if (!updatedExpenses.includes(trimmedName)) updatedExpenses.push(trimmedName);
     }
+    
+    // SALVA CATEGORIAS NO FIREBASE
+    const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
+    await setDoc(catRef, { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
+    
     setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   };
 
   const requestDeleteCategory = (categoryName, type) => {
-    openConfirm('Excluir Categoria', `Tem certeza que deseja excluir a categoria "${categoryName}"? Os lançamentos existentes serão mantidos.`, () => {
-        if (type === 'income') setIncomeCategories(prev => prev.filter(c => c !== categoryName));
-        else setExpenseCategories(prev => prev.filter(c => c !== categoryName));
-        closeConfirm();
-    });
-  };
+    openConfirm('Excluir Categoria', `Tem certeza que deseja excluir "${categoryName}"?`, async () => {
+        let updatedIncomes = [...incomeCategories];
+        let updatedExpenses = [...expenseCategories];
+        
+        if (type === 'income') updatedIncomes = updatedIncomes.filter(c => c !== categoryName);
+        else updatedExpenses = updatedExpenses.filter(c => c !== categoryName);
 
-  const handleDeleteAdminUser = (id) => {
-    openConfirm('Excluir Cliente', 'Tem certeza que deseja excluir este cliente permanentemente?', () => {
-        setAdminUsers(prev => prev.filter(user => user.id !== id));
+        const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
+        await setDoc(catRef, { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
         closeConfirm();
     });
   };
@@ -327,13 +411,9 @@ function DashboardApp({ currentUser, onLogout }) {
   const handleToggleUserStatus = (user) => {
     const isCurrentlyActive = user.status === 'Ativo';
     const actionText = isCurrentlyActive ? 'bloquear' : 'ativar';
-    openConfirm(`${capitalizeFirstLetter(actionText)} Cliente`, `Tem certeza que deseja ${actionText} o acesso deste cliente?`, () => {
-        setAdminUsers(prev => prev.map(u => {
-          if (u.id === user.id) {
-            return { ...u, status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' };
-          }
-          return u;
-        }));
+    openConfirm(`${capitalizeFirstLetter(actionText)} Cliente`, `Tem certeza que deseja ${actionText} o acesso deste cliente?`, async () => {
+        const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
+        await setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
         closeConfirm();
     });
   };
@@ -439,7 +519,7 @@ function DashboardApp({ currentUser, onLogout }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
            <div className="space-y-6">
              <Card className="p-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><Tag className="text-orange-500" size={20}/> Onde seu dinheiro foi?</h3>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><Tag className="text-orange-500" size={20}/> Onde foi o seu dinheiro?</h3>
                 {sortedCategories.length > 0 ? (
                   <div className="space-y-5">
                     {sortedCategories.map(([cat, val]) => {
@@ -452,7 +532,7 @@ function DashboardApp({ currentUser, onLogout }) {
                       )
                     })}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registrada.</p>)}
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
              </Card>
              <Card className="p-6">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-indigo-500" size={20}/> Formas de Pagamento (Saídas)</h3>
@@ -468,7 +548,7 @@ function DashboardApp({ currentUser, onLogout }) {
                       )
                     })}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registrada.</p>)}
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
              </Card>
            </div>
            <Card className="p-6 flex flex-col h-full">
@@ -551,7 +631,7 @@ function DashboardApp({ currentUser, onLogout }) {
 
   const renderCategories = () => (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Categorias</h2><p className="text-slate-500 mt-1">Crie as "gavetas" onde seus lançamentos serão guardados.</p></header>
+      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Categorias</h2><p className="text-slate-500 mt-1">Crie as "gavetas" onde os seus lançamentos serão guardados.</p></header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
@@ -601,10 +681,10 @@ function DashboardApp({ currentUser, onLogout }) {
       <Card className="bg-emerald-50/50 border border-emerald-100 p-8 shadow-sm">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div className="flex items-center gap-4"><div className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center shrink-0 text-white shadow-sm"><span className="material-symbols-outlined text-3xl">support_agent</span></div><div><h3 className="text-emerald-800 font-bold text-xl mb-1">Fale com um Humano</h3><p className="text-emerald-600/80 font-medium text-sm">Atendimento seg. a sex. das 09h às 18h</p></div></div>
-          <div className="w-full md:w-auto"><p className="text-slate-600 mb-4 font-medium md:max-w-[300px]">Precisa de ajuda para usar o sistema, relatar um problema ou reativar seu plano? Clique no botão para chamar nossa equipe técnica diretamente no WhatsApp.</p><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
+          <div className="w-full md:w-auto"><p className="text-slate-600 mb-4 font-medium md:max-w-[300px]">Precisa de ajuda para usar o sistema, relatar um problema ou reativar o seu plano? Clique no botão para chamar a nossa equipa técnica.</p><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
         </div>
       </Card>
-      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">Meu plano expirou, como faço para renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> no menu lateral e clique no botão <b>"Renovar Assinatura"</b>. Você será direcionado para o nosso WhatsApp para validar seu pagamento e reativar seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Como apago uma conta que lancei errado?</h4><p className="text-slate-600 text-sm">Vá na aba "Lançamentos" e clique no ícone da lixeirinha vermelha ao lado do lançamento errado.</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Seus dados são salvos em servidores na nuvem em tempo real. Você pode acessar de qualquer celular ou computador sem medo de perder nada.</p></Card></div></div>
+      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Aceda ao separador <b>"Meu Plano"</b> e clique em <b>"Renovar Assinatura"</b>. Será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode aceder de qualquer telemóvel ou computador.</p></Card></div></div>
     </div>
   );
 
@@ -612,35 +692,29 @@ function DashboardApp({ currentUser, onLogout }) {
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl">
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Como Funciona</h2><p className="text-slate-500 mt-1">Um passo a passo simples para dominar o sistema.</p></header>
       <div className="space-y-4">
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre suas Categorias</h3><p className="text-slate-600">Acesse a aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Aluguel) e receitas (Serviço, Venda).</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Registre as Movimentações</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Selecione a categoria desejada e adicione os valores diários.</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo das telas para ver o resultado do Mês. Na aba Lançamentos, clique em "Excel" para enviar ao contador.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Aceda ao separador "Categorias" e crie os nomes dos seus tipos de despesas e receitas.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Registe as Movimentações</h3><p className="text-slate-600">Vá a "Lançamentos" &gt; "Novo Lançamento". Selecione a categoria e guarde.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro para ver o Mês. Em Lançamentos, clique em "Excel" para exportar.</p></div></Card>
       </div>
     </div>
   );
 
   const renderPlans = () => {
-    const handleUpgrade = (planName) => setUserProfile(prev => ({...prev, plan: planName, daysRemaining: planName === 'Pro' ? 30 : 30}));
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie sua assinatura do LD Finanças.</p></header>
+        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
         <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
           <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
               <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
-              <div className="text-right"><span className={`inline-block font-bold px-3 py-1 rounded-full text-sm ${userProfile.daysRemaining > 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.daysRemaining > 0 ? 'Ativo' : 'Expirado'}</span><p className="text-sm text-slate-500 mt-2 font-medium">{userProfile.daysRemaining} dias restantes</p></div>
+              <div className="text-right"><span className={`inline-block font-bold px-3 py-1 rounded-full text-sm ${userProfile.daysRemaining > 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.daysRemaining > 0 ? 'Ativo' : 'Expirado'}</span><p className="text-sm text-slate-500 mt-2 font-medium">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias restantes`}</p></div>
           </div>
           <div className="space-y-6">
-              <h4 className="font-bold text-slate-800 text-lg">Opções de Assinatura</h4>
+              <h4 className="font-bold text-slate-800 text-lg">Atualizar Assinatura</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20' : 'border-slate-200 hover:border-emerald-300'}`}>
-                  {userProfile.plan === 'Free' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Teste Grátis</h5><p className="text-slate-500 text-sm mb-4 h-10">Conheça o sistema por 30 dias sem compromisso.</p><p className="text-2xl font-black text-slate-800 mb-6">R$ 0,00</p>
-                  <Button className="w-full" variant={userProfile.plan === 'Free' ? 'outline' : 'secondary'} onClick={() => handleUpgrade('Free')}>{userProfile.plan === 'Free' ? 'Renovar Teste' : 'Escolher Free'}</Button>
-                </div>
-                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' || userProfile.plan === 'Admin' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 hover:border-emerald-300'}`}>
-                  {(userProfile.plan === 'Pro' || userProfile.plan === 'Admin') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
+                <div className={`border-2 rounded-xl p-5 relative transition-all border-emerald-500 bg-emerald-50/20 shadow-md`}>
+                  <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5><p className="text-slate-500 text-sm mb-4 h-10">Acesso completo ao sistema e atualizações.</p><p className="text-2xl font-black text-emerald-600 mb-6">R$ 10,00<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  <Button className="w-full" variant={userProfile.plan === 'Pro' || userProfile.plan === 'Admin' ? 'outline' : 'primary'} onClick={() => handleUpgrade('Pro')}>{(userProfile.plan === 'Pro' || userProfile.plan === 'Admin') ? 'Renovar Assinatura' : 'Assinar Pro'}</Button>
+                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero renovar meu plano do LD Finanças!', '_blank')}>Renovar no WhatsApp</Button>
                 </div>
               </div>
           </div>
@@ -654,15 +728,14 @@ function DashboardApp({ currentUser, onLogout }) {
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Administrativo</h2><p className="text-slate-500 mt-1">Visão geral dos clientes do SaaS.</p></header>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse">
-          <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-bold text-slate-500"><th className="p-4 whitespace-nowrap">ID</th><th className="p-4 whitespace-nowrap">Usuário</th><th className="p-4 whitespace-nowrap">WhatsApp</th><th className="p-4 whitespace-nowrap">Plano</th><th className="p-4 whitespace-nowrap">Dias</th><th className="p-4 whitespace-nowrap">Status</th><th className="p-4 whitespace-nowrap">Ações</th></tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-bold text-slate-500"><th className="p-4 whitespace-nowrap">Usuário</th><th className="p-4 whitespace-nowrap">WhatsApp</th><th className="p-4 whitespace-nowrap">Plano</th><th className="p-4 whitespace-nowrap">Dias</th><th className="p-4 whitespace-nowrap">Status</th><th className="p-4 whitespace-nowrap">Ações</th></tr></thead>
           <tbody className="text-sm">
             {adminUsers.map(user => (
-              <tr key={user.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                <td className="p-4 text-slate-400 font-bold">{user.id}</td>
+              <tr key={user.uid} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                 <td className="p-4"><p className="font-bold text-slate-800 whitespace-nowrap">{user.name}</p><p className="text-slate-500 text-xs">{user.email}</p></td>
                 <td className="p-4 text-slate-500 whitespace-nowrap">{user.whatsapp}</td>
                 <td className="p-4"><span className="bg-slate-100 text-slate-700 font-bold px-2 py-1 rounded text-xs uppercase">{user.plan}</span></td>
-                <td className="p-4 font-medium text-slate-800">{user.daysRemaining} dias</td>
+                <td className="p-4 font-medium text-slate-800">{user.daysRemaining > 900 ? 'Vitalício' : `${user.daysRemaining} d`}</td>
                 <td className="p-4">
                   {user.status === 'Ativo' 
                     ? <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-1 rounded text-xs uppercase">Ativo</span>
@@ -670,23 +743,13 @@ function DashboardApp({ currentUser, onLogout }) {
                   }
                 </td>
                 <td className="p-4 flex gap-2">
-                  <button 
-                    onClick={() => handleToggleUserStatus(user)} 
-                    className={`p-2 rounded-lg transition-colors ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} 
-                    title={user.status === 'Ativo' ? "Bloquear Usuário" : "Ativar Usuário"}
-                  >
+                  <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
                     {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
                   </button>
-                  <button onClick={() => openConfirm('Em Breve', 'A edição de clientes ficará ativa assim que conectarmos o banco de dados.', closeConfirm, true)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Editar"><Edit2 size={16}/></button>
-                  <button onClick={() => handleDeleteAdminUser(user.id)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100" title="Excluir"><Trash2 size={16}/></button>
                 </td>
               </tr>
             ))}
-            {adminUsers.length === 0 && (
-              <tr>
-                <td colSpan="7" className="p-8 text-center text-slate-500 font-medium">Nenhum cliente cadastrado no momento.</td>
-              </tr>
-            )}
+            {adminUsers.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-500 font-medium">A carregar clientes...</td></tr>}
           </tbody>
         </table>
       </div>
@@ -713,15 +776,20 @@ function DashboardApp({ currentUser, onLogout }) {
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.plan === 'Admin' ? 'bg-slate-800 text-white' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
-          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleLogout(); }} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 hover:border-red-100 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
+          <button type="button" onClick={handleLogout} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 hover:border-red-100 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
         </div>
       </aside>
       {isMobileMenuOpen && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />)}
       <main className="flex-1 w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-10 pb-24 overflow-x-hidden">
-        {currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}
+        {userProfile.status === 'Bloqueado' ? (
+          <div className="p-8 text-center bg-white rounded-3xl border border-red-200 text-red-600 font-bold text-xl mt-10">A sua conta está bloqueada ou o seu plano expirou. Contate o suporte.</div>
+        ) : (
+          <>
+            {currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}
+          </>
+        )}
       </main>
 
-      {/* Modal de Transação */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
@@ -746,7 +814,6 @@ function DashboardApp({ currentUser, onLogout }) {
         </div>
       )}
 
-      {/* Modal de Editar/Criar Categoria */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })}></div>
@@ -760,7 +827,6 @@ function DashboardApp({ currentUser, onLogout }) {
         </div>
       )}
 
-      {/* Modal de Confirmação Genérica */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
@@ -778,12 +844,51 @@ function DashboardApp({ currentUser, onLogout }) {
   );
 }
 
+// --- APP PRINCIPAL (CONTROLE DE SESSÃO) ---
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!user) {
-    return <Auth onLogin={(userData) => setUser(userData)} />;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      if (user) {
+        // Busca o perfil do utilizador ligado no Firestore
+        const docRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
+        const unsubProfile = onSnapshot(docRef, (docSnap) => {
+           if(docSnap.exists()) {
+              setUserProfile({ uid: user.uid, ...docSnap.data() });
+           } else {
+              // Se por algum motivo não encontrar perfil, cria um básico
+              const basicProfile = { name: 'Utilizador', email: user.email, plan: 'Free', daysRemaining: 30, status: 'Ativo' };
+              setDoc(docRef, basicProfile);
+              setUserProfile({ uid: user.uid, ...basicProfile });
+           }
+           setLoading(false);
+        });
+        return () => unsubProfile();
+      } else {
+        setUserProfile(null);
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-emerald-600 font-bold text-xl animate-pulse flex items-center gap-2">
+           <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div> A carregar...
+        </div>
+      </div>
+    );
   }
 
-  return <DashboardApp currentUser={user} onLogout={() => setUser(null)} />;
+  if (!authUser || !userProfile) {
+    return <Auth />;
+  }
+
+  return <DashboardApp userProfile={userProfile} />;
 }
