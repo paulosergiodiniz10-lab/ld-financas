@@ -779,11 +779,11 @@ function DashboardApp({ currentUser, onLogout }) {
 }
 
 export default function App() {
-   const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null);
 
-   if (!user) {
-     return <Auth onLogin={(userData) => setUser(userData)} />;
-   }
+  if (!user) {
+    return <Auth onLogin={(userData) => setUser(userData)} />;
+  }
 
-   return <DashboardApp currentUser={user} onLogout={() => setUser(null)} />;
+  return <DashboardApp currentUser={user} onLogout={() => setUser(null)} />;
 }
