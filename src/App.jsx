@@ -261,6 +261,7 @@ function DashboardApp({ userProfile }) {
   const [formData, setFormData] = useState({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
+  const [editingAdminUser, setEditingAdminUser] = useState(null);
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
@@ -268,6 +269,11 @@ function DashboardApp({ userProfile }) {
   // BUSCA DADOS DO FIREBASE EM TEMPO REAL
   useEffect(() => {
     if (!userProfile?.uid) return;
+
+    // Segurança extra: se a view for admin e o utilizador não for admin, volta para o início
+    if (currentView === 'admin' && userProfile.email !== ADMIN_EMAIL) {
+      setCurrentView('dashboard');
+    }
 
     // Puxa Lançamentos
     const txRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions');
@@ -408,14 +414,29 @@ function DashboardApp({ userProfile }) {
     });
   };
 
-  const handleToggleUserStatus = (user) => {
+  const handleToggleUserStatus = async (user) => {
     const isCurrentlyActive = user.status === 'Ativo';
-    const actionText = isCurrentlyActive ? 'bloquear' : 'ativar';
-    openConfirm(`${capitalizeFirstLetter(actionText)} Cliente`, `Tem certeza que deseja ${actionText} o acesso deste cliente?`, async () => {
-        const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-        await setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
+    const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
+    // Bloqueia ou Ativa instantaneamente sem perguntar
+    await setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
+  };
+
+  const handleDeleteAdminUser = (user) => {
+    openConfirm('Excluir Empresa', `Tem certeza que deseja excluir a conta de "${user.name}" permanentemente? Todos os dados dele serão apagados.`, async () => {
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid));
         closeConfirm();
     });
+  };
+
+  const handleSaveAdminUser = async (e) => {
+    e.preventDefault();
+    if (!editingAdminUser) return;
+    const userRef = doc(db, 'artifacts', APP_ID, 'users', editingAdminUser.uid);
+    await setDoc(userRef, { 
+        plan: editingAdminUser.plan,
+        daysRemaining: parseInt(editingAdminUser.daysRemaining) || 0
+    }, { merge: true });
+    setEditingAdminUser(null);
   };
 
   const filteredTransactions = useMemo(() => {
@@ -743,8 +764,14 @@ function DashboardApp({ userProfile }) {
                   }
                 </td>
                 <td className="p-4 flex gap-2">
-                  <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
+                  <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear Acesso" : "Desbloquear Acesso"}>
                     {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
+                  </button>
+                  <button onClick={() => setEditingAdminUser(user)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Alterar Plano da Empresa">
+                    <Edit2 size={16}/>
+                  </button>
+                  <button onClick={() => handleDeleteAdminUser(user)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Excluir Empresa">
+                    <Trash2 size={16}/>
                   </button>
                 </td>
               </tr>
@@ -839,6 +866,22 @@ function DashboardApp({ userProfile }) {
               </div>
             </div>
          </div>
+      )}
+
+      {/* Modal de Editar Plano da Empresa (Admin) */}
+      {editingAdminUser && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditingAdminUser(null)}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
+             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><ShieldAlert className="text-slate-400" size={24}/>Alterar Plano e Dias</h3><button onClick={() => setEditingAdminUser(null)} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
+             <form onSubmit={handleSaveAdminUser} className="p-6">
+                <Select label="Plano do Cliente" name="plan" value={editingAdminUser.plan} onChange={(e) => setEditingAdminUser({...editingAdminUser, plan: e.target.value})} options={['Free', 'Pro', 'Admin']} required />
+                <Input label="Dias Restantes de Acesso" name="daysRemaining" type="number" value={editingAdminUser.daysRemaining} onChange={(e) => setEditingAdminUser({...editingAdminUser, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
+                
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setEditingAdminUser(null)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
+             </form>
+          </div>
+        </div>
       )}
     </div>
   );
