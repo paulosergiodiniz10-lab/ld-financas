@@ -791,31 +791,37 @@ function DashboardApp({ userProfile }) {
         <table className="w-full text-left border-collapse">
           <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-bold text-slate-500"><th className="p-4 whitespace-nowrap">Usuário</th><th className="p-4 whitespace-nowrap">WhatsApp</th><th className="p-4 whitespace-nowrap">Plano</th><th className="p-4 whitespace-nowrap">Dias</th><th className="p-4 whitespace-nowrap">Status</th><th className="p-4 whitespace-nowrap">Ações</th></tr></thead>
           <tbody className="text-sm">
-            {adminUsers.map(user => (
-              <tr key={user.uid} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                <td className="p-4"><p className="font-bold text-slate-800 whitespace-nowrap">{user.name}</p><p className="text-slate-500 text-xs">{user.email}</p></td>
-                <td className="p-4 text-slate-500 whitespace-nowrap">{user.whatsapp}</td>
-                <td className="p-4"><span className="bg-slate-100 text-slate-700 font-bold px-2 py-1 rounded text-xs uppercase">{user.plan}</span></td>
-                <td className="p-4 font-medium text-slate-800">{user.daysRemaining > 900 ? 'Vitalício' : `${user.daysRemaining} d`}</td>
-                <td className="p-4">
-                  {user.status === 'Ativo' 
-                    ? <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-1 rounded text-xs uppercase">Ativo</span>
-                    : <span className="text-red-700 bg-red-50 font-bold px-2 py-1 rounded text-xs uppercase">Bloqueado</span>
-                  }
-                </td>
-                <td className="p-4 flex gap-2">
-                  <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors border ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
-                    {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
-                  </button>
-                  <button onClick={() => setEditingAdminUser(user)} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Editar Plano">
-                    <Edit2 size={16}/>
-                  </button>
-                  <button onClick={() => handleDeleteAdminUser(user)} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors" title="Excluir">
-                    <Trash2 size={16}/>
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {adminUsers.map(user => {
+              const isThisUserAdmin = user.email === ADMIN_EMAIL || user.plan === 'Admin';
+              const displayPlan = isThisUserAdmin ? 'Admin' : user.plan;
+              const displayDays = isThisUserAdmin || user.daysRemaining > 900 ? 'Vitalício' : `${user.daysRemaining} d`;
+
+              return (
+                <tr key={user.uid} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                  <td className="p-4"><p className="font-bold text-slate-800 whitespace-nowrap">{user.name}</p><p className="text-slate-500 text-xs">{user.email}</p></td>
+                  <td className="p-4 text-slate-500 whitespace-nowrap">{user.whatsapp || '-'}</td>
+                  <td className="p-4"><span className={`font-bold px-2 py-1 rounded text-xs uppercase shadow-sm ${isThisUserAdmin ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-700'}`}>{displayPlan}</span></td>
+                  <td className="p-4 font-medium text-slate-800">{displayDays}</td>
+                  <td className="p-4">
+                    {user.status === 'Ativo' 
+                      ? <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-1 rounded text-xs uppercase">Ativo</span>
+                      : <span className="text-red-700 bg-red-50 font-bold px-2 py-1 rounded text-xs uppercase">Bloqueado</span>
+                    }
+                  </td>
+                  <td className="p-4 flex gap-2">
+                    <button onClick={() => handleToggleUserStatus(user)} disabled={isThisUserAdmin} className={`p-2 rounded-lg transition-colors border disabled:opacity-30 disabled:cursor-not-allowed ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
+                      {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
+                    </button>
+                    <button onClick={() => setEditingAdminUser(user)} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Editar Plano">
+                      <Edit2 size={16}/>
+                    </button>
+                    <button onClick={() => handleDeleteAdminUser(user)} disabled={isThisUserAdmin} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Excluir">
+                      <Trash2 size={16}/>
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
             {adminUsers.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-500 font-medium">A carregar clientes...</td></tr>}
           </tbody>
         </table>
