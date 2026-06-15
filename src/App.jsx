@@ -332,7 +332,7 @@ function DashboardApp({ userProfile }) {
   // ===================== LANÇAMENTOS DIÁRIOS =====================
   const handleOpenModal = (transaction = null) => {
     if (transaction) {
-      let cat = transaction.category; let customDesc = '';
+      let cat = transaction.category || ''; let customDesc = '';
       const match = cat.match(/^(.*) \((.*)\)$/);
       if (match && match[1].toLowerCase().includes('outros')) { cat = match[1]; customDesc = match[2]; }
       setFormData({ amount: transaction.amount, type: transaction.type, date: transaction.date, category: cat, customDescription: customDesc, paymentMethod: transaction.paymentMethod });
@@ -351,7 +351,7 @@ function DashboardApp({ userProfile }) {
     e.preventDefault();
     if (!formData.category || !formData.amount) return;
     let finalCategory = formData.category;
-    if (formData.category.toLowerCase().includes('outros') && formData.customDescription.trim()) finalCategory = `${formData.category} (${formData.customDescription.trim()})`;
+    if (String(formData.category).toLowerCase().includes('outros') && formData.customDescription.trim()) finalCategory = `${formData.category} (${formData.customDescription.trim()})`;
     
     let amountStr = formData.amount.toString().trim().replace(/[^\d.,]/g, '');
     if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
@@ -368,7 +368,7 @@ function DashboardApp({ userProfile }) {
         const txToDelete = transactions.find(t => t.id === id);
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
         
-        // REVERTE CONTA SE EXISTIR CORDÃO UMBILICAL
+        // REVERTE CONTA SE EXISTIR CORDÃO UMBILICAL (Volta a ficar pendente)
         if (txToDelete && txToDelete.originBillId) {
             const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId);
             await setDoc(billRef, { status: 'pending', paymentDate: null, paidAmount: null }, { merge: true });
@@ -387,7 +387,7 @@ function DashboardApp({ userProfile }) {
   const handleSaveBill = async (e) => {
     e.preventDefault();
     let finalCategory = billFormData.category;
-    if (billFormData.category.toLowerCase().includes('outros') && billFormData.customDescription.trim()) finalCategory = `${billFormData.category} (${billFormData.customDescription.trim()})`;
+    if (String(billFormData.category).toLowerCase().includes('outros') && billFormData.customDescription.trim()) finalCategory = `${billFormData.category} (${billFormData.customDescription.trim()})`;
     
     let amountStr = billFormData.amount.toString().trim().replace(/[^\d.,]/g, '');
     if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
@@ -414,7 +414,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const requestDeleteBill = (id) => {
-    openConfirm('Excluir Histórico', 'Apagar esta conta do seu histórico/agenda?', async () => {
+    openConfirm('Excluir Histórico', 'Apagar esta conta permanentemente do sistema?', async () => {
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', id));
         closeConfirm();
     });
@@ -764,7 +764,7 @@ function DashboardApp({ userProfile }) {
         {renderFilterBar()}
         {renderFilterExtras()}
 
-        {/* CARTÕES DE PREVISÃO COM O SALDO PREVISTO EM DESTAQUE (bg-slate-800) */}
+        {/* CARTÕES DE PREVISÃO COM O SALDO PREVISTO EM DESTAQUE */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-slate-800 rounded-2xl p-6 shadow-xl transform hover:-translate-y-1 transition-transform duration-300">
             <div className="flex items-center gap-2 mb-2 opacity-80 text-slate-300"><Receipt size={18} /><span className="text-xs font-bold uppercase tracking-wider">Saldo Previsto</span></div>
@@ -817,6 +817,7 @@ function DashboardApp({ userProfile }) {
                  <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden opacity-70 group-hover:opacity-100 transition-opacity">
                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600"><CheckCircle size={20}/></div>
                    <div className="min-w-0 flex-1">
+                     {/* CORREÇÃO DO BUG: Trocado bill.title por bill.category */}
                      <p className="font-bold text-slate-800 text-base truncate line-through">{bill.category}</p>
                      <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> Pago em: {formatDate(bill.paymentDate)}</p>
                    </div>
@@ -885,20 +886,20 @@ function DashboardApp({ userProfile }) {
          <h4 className="font-bold text-slate-800 text-lg mb-4">Atualizar Assinatura</h4>
          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* PLANO BÁSICO - COMO EDITAR: Altere o "Plano Básico", os "19,90" e as descrições abaixo conforme desejar. */}
+            {/* PLANO BÁSICO - EDITE OS VALORES E TEXTOS AQUI */}
             <div className={`p-6 rounded-2xl border-2 transition-all relative ${userProfile.plan === 'Básico' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 hover:border-emerald-200'}`}>
                {userProfile.plan === 'Básico' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">Atual</div>}
                <h5 className="font-bold text-xl text-slate-800 mb-2">Plano Básico</h5>
-               <p className="text-slate-500 text-sm mb-6 min-h-[40px]">Lançamentos ilimitados diários e categorias personalizadas.</p>
+               <p className="text-slate-500 text-sm mb-6 min-h-[40px]">Lançamentos ilimitados diários e categorias personalizadas. Sem gestão de previsões.</p>
                <div className="mb-6"><span className="text-3xl font-black text-slate-800">R$ 9,90</span><span className="text-slate-500 font-medium">/mês</span></div>
                <a href={`https://wa.me/5564993181827?text=Olá! Quero assinar o Plano Básico (R$ 9,90) do LD Finanças. Meu email é: ${userProfile.email}`} target="_blank" rel="noopener noreferrer" className="block w-full text-center py-3 px-4 rounded-xl font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">Assinar via WhatsApp</a>
             </div>
 
-            {/* PLANO PRO - COMO EDITAR: Altere o "Plano Pro", os "29,90" e as descrições abaixo conforme desejar. */}
+            {/* PLANO PRO - EDITE OS VALORES E TEXTOS AQUI */}
             <div className={`p-6 rounded-2xl border-2 transition-all relative ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 hover:border-emerald-200'}`}>
                {userProfile.plan === 'Pro' ? <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">Atual</div> : <div className="absolute -top-3 left-4 bg-amber-400 text-amber-900 text-xs font-bold px-3 py-1 rounded-full shadow-sm">MAIS VENDIDO</div>}
                <h5 className="font-bold text-xl text-slate-800 mb-2 mt-2">Plano Pro</h5>
-               <p className="text-slate-500 text-sm mb-6 min-h-[40px]">Tudo do Básico + <strong className="text-slate-700">Gestão de Contas a Pagar e Receber</strong>.</p>
+               <p className="text-slate-500 text-sm mb-6 min-h-[40px]">Tudo do Básico + <strong className="text-slate-700">Gestão Completa de Contas a Pagar e Receber</strong>.</p>
                <div className="mb-6"><span className="text-3xl font-black text-emerald-600">R$ 19,90</span><span className="text-slate-500 font-medium">/mês</span></div>
                <a href={`https://wa.me/5564993181827?text=Olá! Quero assinar o Plano Pro (R$ 19,90) do LD Finanças. Meu email é: ${userProfile.email}`} target="_blank" rel="noopener noreferrer" className="block w-full text-center py-3 px-4 rounded-xl font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 transition-colors">Assinar via WhatsApp</a>
             </div>
@@ -969,7 +970,7 @@ function DashboardApp({ userProfile }) {
           <button onClick={() => {setCurrentView('dashboard'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'dashboard' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><Home size={20}/> Início</button>
           <button onClick={() => {setCurrentView('transactions'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'transactions' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><CardIcon size={20}/> Lançamentos</button>
           
-          {/* TRAVA DO PLANO: Só exibe Contas a Pagar/Receber para PRO, ADMIN ou FREE (Test-Drive) */}
+          {/* TRAVA DO PLANO: Exibe Contas a Pagar/Receber para PRO, ADMIN ou FREE (Test-Drive) */}
           {(userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.plan === 'Free') && (
             <button onClick={() => {setCurrentView('bills'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'bills' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><Receipt size={20}/> Contas Pagar/Receber</button>
           )}
@@ -1049,7 +1050,7 @@ function DashboardApp({ userProfile }) {
               <div className="mb-6"><label className="text-sm font-bold text-slate-700 mb-2 block">Valor (R$)</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">R$</span><input type="text" name="amount" value={formData.amount} onChange={handleFormChange} required placeholder="0,00" className={`w-full border-2 rounded-xl pl-12 pr-4 py-4 text-2xl font-black focus:outline-none focus:ring-0 transition-all ${formData.type === 'expense' ? 'text-red-600 border-red-100 focus:border-red-500 bg-red-50/30' : 'text-emerald-600 border-emerald-100 focus:border-emerald-500 bg-emerald-50/30'}`} /></div></div>
               <Input label="Data" name="date" type="date" value={formData.date} onChange={handleFormChange} required />
               <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} options={formData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} required />
-              {formData.category.toLowerCase() === 'outros' && <Input label="Descrição da Categoria (Ex: Combustível)" name="customDescription" value={formData.customDescription} onChange={handleFormChange} required placeholder="Digite a descrição..." />}
+              {String(formData.category).toLowerCase().includes('outros') && <Input label="Descrição da Categoria (Ex: Combustível)" name="customDescription" value={formData.customDescription} onChange={handleFormChange} required placeholder="Digite a descrição..." />}
               <Select label="Forma de Pagamento" name="paymentMethod" value={formData.paymentMethod} onChange={handleFormChange} options={PAYMENT_METHODS} required />
               
               <div className="mt-8 flex gap-3"><button type="button" onClick={handleCloseModal} className="flex-1 py-3.5 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className={`flex-1 py-3.5 px-4 font-bold rounded-xl text-white transition-colors shadow-sm ${formData.type === 'expense' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Salvar</button></div>
@@ -1058,7 +1059,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE AGENDAMENTO (CONTAS A PAGAR E RECEBER) - SEM TITULO, COM CATEGORIAS */}
+      {/* MODAL DE AGENDAMENTO (CONTAS A PAGAR E RECEBER) */}
       {isBillModalOpen && (
         <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBillModalOpen(false)}></div>
@@ -1074,9 +1075,8 @@ function DashboardApp({ userProfile }) {
             </div>
 
             <form onSubmit={handleSaveBill}>
-              {/* REMOVIDO TÍTULO - USANDO CATEGORIAS AGORA */}
               <Select label="Categoria" name="category" value={billFormData.category} onChange={handleBillFormChange} options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} required />
-              {billFormData.category.toLowerCase() === 'outros' && <Input label="Descrição da Categoria (Ex: Aluguel da Loja)" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} required placeholder="Digite a descrição..." />}
+              {String(billFormData.category).toLowerCase().includes('outros') && <Input label="Descrição da Categoria (Ex: Aluguel da Loja)" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} required placeholder="Digite a descrição..." />}
               
               <Input label="Valor Previsto (R$)" name="amount" value={billFormData.amount} onChange={handleBillFormChange} required placeholder="0,00" />
               <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={handleBillFormChange} required />
@@ -1140,7 +1140,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* NOVO: Modal de Edição do Admin (Planos e Dias) */}
+      {/* MODAL DE EDIÇÃO DO ADMIN */}
       {adminEditModal.isOpen && adminEditModal.user && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 })}></div>
@@ -1155,7 +1155,6 @@ function DashboardApp({ userProfile }) {
                     <p className="text-sm text-slate-600"><span className="font-bold text-slate-800">Cliente:</span> {adminEditModal.user.name}</p>
                     <p className="text-sm text-slate-600"><span className="font-bold text-slate-800">E-mail:</span> {adminEditModal.user.email}</p>
                  </div>
-                 {/* BOTÃO MÁGICO DE RENOVAÇÃO RÁPIDA */}
                  <button 
                     type="button"
                     onClick={() => {
