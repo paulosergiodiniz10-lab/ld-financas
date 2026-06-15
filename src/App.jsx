@@ -52,7 +52,7 @@ const CardIcon = CreditCard;
 const AlertTriangle = (p) => <IconWrapper name="warning" {...p} />;
 const Lock = (p) => <IconWrapper name="lock" {...p} />;
 const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
-const Crown = (p) => <IconWrapper name="workspace_premium" {...p} />; // Novo ícone para Admin
+const Crown = (p) => <IconWrapper name="workspace_premium" {...p} />;
 
 // --- CONFIGURAÇÕES DO SISTEMA ---
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
@@ -871,7 +871,22 @@ function DashboardApp({ userProfile }) {
       {isMobileMenuOpen && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />)}
       <main className="flex-1 w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-10 pb-24 overflow-x-hidden">
         {userProfile.status === 'Bloqueado' ? (
-          <div className="p-8 text-center bg-white rounded-3xl border border-red-200 text-red-600 font-bold text-xl mt-10">A sua conta está bloqueada ou o seu plano expirou. Contate o suporte.</div>
+          <div className="max-w-md mx-auto mt-16 p-8 bg-white rounded-3xl shadow-xl border border-red-100 text-center animate-in fade-in zoom-in-95 duration-500">
+            <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Lock size={40} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 mb-2">Acesso Restrito</h2>
+            <p className="text-slate-600 mb-8 font-medium">A sua conta foi bloqueada temporariamente ou a sua assinatura expirou.</p>
+            
+            <div className="space-y-3">
+              <a href="https://wa.me/5564981005505?text=Olá, o meu acesso ao LD Finanças está bloqueado. Pode ajudar-me?" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-4 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors active:scale-[0.98]">
+                <span className="material-symbols-outlined">chat</span> Falar com Suporte (WhatsApp)
+              </a>
+              <button onClick={handleLogout} className="flex items-center justify-center gap-2 w-full bg-slate-100 text-slate-700 font-bold px-6 py-4 rounded-xl hover:bg-slate-200 transition-colors active:scale-[0.98]">
+                <LogOut size={20} /> Sair da Conta
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             {currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}
