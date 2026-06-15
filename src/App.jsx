@@ -685,7 +685,7 @@ function DashboardApp({ userProfile }) {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <Card className="p-6 border-none shadow-md text-white bg-[#000066]">
+          <Card className="p-6 border-none shadow-md text-white bg-slate-800">
             <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-2"><Wallet size={14}/> Saldo Previsto</p>
             <h3 className={`text-3xl font-black ${predictedBalance < 0 ? 'text-red-400' : 'text-white'}`}>{predictedBalance < 0 ? `-R$ ${formatNumber(Math.abs(predictedBalance))}` : `R$ ${formatNumber(predictedBalance)}`}</h3>
           </Card>
