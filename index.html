@@ -16,17 +16,56 @@
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; line-height: 1; }
+      
+      /* Bloqueia a seleção de texto para dificultar a cópia */
+      body {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      input, textarea, select {
+        -webkit-user-select: auto;
+        -moz-user-select: auto;
+        -ms-user-select: auto;
+        user-select: auto;
+      }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-900 font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
     <!-- Ativar o PWA -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js');
         });
+      }
+    </script>
+
+    <!-- SCRIPT DE BLINDAGEM ANTI-INSPEÇÃO -->
+    <script>
+      // Desativa o botão direito do mouse
+      document.addEventListener('contextmenu', event => event.preventDefault());
+
+      // Desativa os atalhos de teclado comuns de desenvolvedores
+      document.onkeydown = function(e) {
+        // F12
+        if(e.keyCode == 123) { return false; }
+        // Ctrl+Shift+I (Windows/Linux) ou Cmd+Option+I (Mac)
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
+        if(e.metaKey && e.altKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
+        // Ctrl+Shift+C (Inspecionar Elemento)
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
+        if(e.metaKey && e.altKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
+        // Ctrl+Shift+J (Console)
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
+        if(e.metaKey && e.altKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
+        // Ctrl+U (Ver Código Fonte)
+        if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
+        if(e.metaKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
       }
     </script>
   </body>
