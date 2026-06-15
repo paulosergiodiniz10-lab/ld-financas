@@ -52,6 +52,7 @@ const CardIcon = CreditCard;
 const AlertTriangle = (p) => <IconWrapper name="warning" {...p} />;
 const Lock = (p) => <IconWrapper name="lock" {...p} />;
 const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
+const Crown = (p) => <IconWrapper name="workspace_premium" {...p} />; // Novo ícone para Admin
 
 // --- CONFIGURAÇÕES DO SISTEMA ---
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
@@ -266,12 +267,15 @@ function DashboardApp({ userProfile }) {
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
+  // CONSTANTES DERIVADAS DO PERFIL (Para saber se é o Dono do Sistema)
+  const isAdmin = userProfile?.email === ADMIN_EMAIL || userProfile?.plan === 'Admin';
+
   // BUSCA DADOS DO FIREBASE EM TEMPO REAL
   useEffect(() => {
     if (!userProfile?.uid) return;
 
-    // Segurança extra: se a view for admin e o utilizador não for admin, volta para o início
-    if (currentView === 'admin' && userProfile.email !== ADMIN_EMAIL) {
+    // Segurança extra: se a view for admin e o usuário não for admin, volta pro início
+    if (currentView === 'admin' && !isAdmin) {
       setCurrentView('dashboard');
     }
 
@@ -297,7 +301,7 @@ function DashboardApp({ userProfile }) {
 
     // Se for ADMIN, puxa todos os clientes
     let unsubUsers = () => {};
-    if (userProfile.email === ADMIN_EMAIL) {
+    if (isAdmin) {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => {
              const data = snapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -306,7 +310,7 @@ function DashboardApp({ userProfile }) {
     }
 
     return () => { unsubTx(); unsubCat(); unsubUsers(); }
-  }, [userProfile?.uid]);
+  }, [userProfile?.uid, isAdmin, currentView]);
 
   const handleLogout = () => {
     openConfirm('Sair do Sistema', 'Tem certeza que deseja encerrar a sua sessão?', () => {
@@ -414,6 +418,7 @@ function DashboardApp({ userProfile }) {
     });
   };
 
+  // Funções Diretas do Painel Administrativo
   const handleToggleUserStatus = async (user) => {
     const isCurrentlyActive = user.status === 'Ativo';
     const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
@@ -721,6 +726,41 @@ function DashboardApp({ userProfile }) {
   );
 
   const renderPlans = () => {
+    // SE FOR O ADMINISTRADOR, MOSTRA O PAINEL VIP DOURADO VITALÍCIO
+    if (isAdmin) {
+      return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
+          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-500 bg-amber-50/10">
+            <div className="flex items-center justify-between border-b border-amber-100 pb-6 mb-6">
+                <div>
+                  <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Crown size={16} className="text-amber-500" /> Plano Atual
+                  </p>
+                  <h3 className="text-3xl font-black text-slate-800 flex items-center gap-2">
+                    Admin
+                  </h3>
+                </div>
+                <div className="text-right">
+                  <span className={`inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700 border border-amber-200 shadow-sm`}>
+                    Ativo
+                  </span>
+                  <p className="text-sm text-slate-500 mt-2 font-bold tracking-wide uppercase">Vitalício</p>
+                </div>
+            </div>
+            <div className="text-center py-6">
+               <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500">
+                  <Crown size={40} />
+               </div>
+               <h4 className="text-xl font-bold text-slate-800 mb-2">Conta de Administrador</h4>
+               <p className="text-slate-600 max-w-md mx-auto">Você tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    // SE FOR UM CLIENTE NORMAL, MOSTRA O PAINEL VERDE COM DIAS RESTANTES
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
@@ -764,13 +804,13 @@ function DashboardApp({ userProfile }) {
                   }
                 </td>
                 <td className="p-4 flex gap-2">
-                  <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear Acesso" : "Desbloquear Acesso"}>
+                  <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors border ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
                     {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
                   </button>
-                  <button onClick={() => setEditingAdminUser(user)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Alterar Plano da Empresa">
+                  <button onClick={() => setEditingAdminUser(user)} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Editar Plano">
                     <Edit2 size={16}/>
                   </button>
-                  <button onClick={() => handleDeleteAdminUser(user)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" title="Excluir Empresa">
+                  <button onClick={() => handleDeleteAdminUser(user)} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors" title="Excluir">
                     <Trash2 size={16}/>
                   </button>
                 </td>
@@ -785,6 +825,16 @@ function DashboardApp({ userProfile }) {
 
   const NavItem = ({ id, icon: Icon, label }) => {
     const isActive = currentView === id;
+    
+    // VISUAL DO BOTÃO ADMIN DESTACADO NO MENU LATERAL
+    if (id === 'admin' && isAdmin) {
+      return (
+        <button onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-bold ${isActive ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>
+          <ShieldAlert size={20} className={isActive ? 'text-amber-400' : 'text-slate-400'} />{label}
+        </button>
+      );
+    }
+
     return (
       <button onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>
         <Icon size={20} className={isActive ? 'text-emerald-600' : 'text-slate-400'} />{label}
@@ -798,11 +848,23 @@ function DashboardApp({ userProfile }) {
       <aside className={`fixed md:sticky top-0 left-0 h-[100dvh] w-72 bg-white border-r border-slate-200 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-6 hidden md:flex items-center gap-2 font-black text-2xl text-slate-800 tracking-tight border-b border-slate-100"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS</div>
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
-          <NavItem id="dashboard" icon={Home} label="Início" /><NavItem id="transactions" icon={Wallet} label="Lançamentos" /><NavItem id="categories" icon={Tag} label="Categorias" /><NavItem id="plans" icon={CreditCard} label="Meu Plano" /><NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" /><NavItem id="support" icon={HelpCircle} label="Suporte" />
-          {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
+          <NavItem id="dashboard" icon={Home} label="Início" />
+          <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
+          <NavItem id="categories" icon={Tag} label="Categorias" />
+          <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
+          <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
+          <NavItem id="support" icon={HelpCircle} label="Suporte" />
+          
+          {/* SEPARAÇÃO VISUAL DO MENU ADMIN */}
+          {isAdmin && (
+            <div className="pt-4 mt-6 border-t border-slate-100">
+              <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Gestão do SaaS</p>
+              <NavItem id="admin" icon={ShieldAlert} label="Administração" />
+            </div>
+          )}
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.plan === 'Admin' ? 'bg-slate-800 text-white' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${isAdmin ? 'bg-slate-800 text-amber-400 shadow-sm' : 'text-emerald-600 bg-emerald-50'}`}>{isAdmin ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{isAdmin || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
           <button type="button" onClick={handleLogout} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 hover:border-red-100 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
         </div>
       </aside>
@@ -817,6 +879,7 @@ function DashboardApp({ userProfile }) {
         )}
       </main>
 
+      {/* MODAL DE LANÇAMENTO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
@@ -841,6 +904,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
+      {/* MODAL DE CATEGORIA */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })}></div>
@@ -854,6 +918,22 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
+      {/* MODAL EDITAR PLANO DO CLIENTE (ADMIN) */}
+      {editingAdminUser && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditingAdminUser(null)}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
+             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><ShieldAlert className="text-slate-400" size={24}/>Alterar Plano</h3><button onClick={() => setEditingAdminUser(null)} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
+             <form onSubmit={handleSaveAdminUser} className="p-6">
+                <Select label="Plano do Cliente" name="plan" value={editingAdminUser.plan} onChange={(e) => setEditingAdminUser({...editingAdminUser, plan: e.target.value})} options={['Free', 'Pro', 'Admin']} required />
+                <Input label="Dias Restantes (999 para Vitalício)" name="daysRemaining" type="number" value={editingAdminUser.daysRemaining} onChange={(e) => setEditingAdminUser({...editingAdminUser, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setEditingAdminUser(null)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
+             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO (LIXEIRA, BLOQUEIO, ETC) */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
@@ -866,22 +946,6 @@ function DashboardApp({ userProfile }) {
               </div>
             </div>
          </div>
-      )}
-
-      {/* Modal de Editar Plano da Empresa (Admin) */}
-      {editingAdminUser && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditingAdminUser(null)}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><ShieldAlert className="text-slate-400" size={24}/>Alterar Plano e Dias</h3><button onClick={() => setEditingAdminUser(null)} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveAdminUser} className="p-6">
-                <Select label="Plano do Cliente" name="plan" value={editingAdminUser.plan} onChange={(e) => setEditingAdminUser({...editingAdminUser, plan: e.target.value})} options={['Free', 'Pro', 'Admin']} required />
-                <Input label="Dias Restantes de Acesso" name="daysRemaining" type="number" value={editingAdminUser.daysRemaining} onChange={(e) => setEditingAdminUser({...editingAdminUser, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
-                
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setEditingAdminUser(null)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
-             </form>
-          </div>
-        </div>
       )}
     </div>
   );
