@@ -65,7 +65,6 @@ const formatDate = (dateString) => {
   const [year, month, day] = dateString.split('-');
   return `${day}/${month}/${year}`;
 };
-const capitalizeFirstLetter = (string) => string ? string.charAt(0).toUpperCase() + string.slice(1).toLowerCase() : "";
 
 // --- COMPONENTES BÁSICOS ---
 const Card = ({ children, className = '' }) => (
@@ -90,7 +89,7 @@ const Button = ({ children, onClick, variant = 'primary', className = '', type =
 const Input = ({ label, name, type = 'text', value, onChange, placeholder, required = false, step, rightElement, inputMode }) => {
   const handleChange = (e) => {
     let newValue = e.target.value;
-    if (type === 'text' && name !== 'password' && name !== 'amount') newValue = capitalizeFirstLetter(newValue);
+    // Removida a trava de Capitalize para permitir digitação livre do usuário
     if (onChange) onChange({ target: { name, value: newValue } });
   };
   return (
@@ -268,6 +267,17 @@ function DashboardApp({ userProfile }) {
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
+  // ORDENAÇÃO DAS CATEGORIAS ("Outros" sempre no topo, restante alfabético)
+  const sortCategories = (cats) => {
+    return [...cats].sort((a, b) => {
+      if (a.toLowerCase() === 'outros') return -1;
+      if (b.toLowerCase() === 'outros') return 1;
+      return a.localeCompare(b);
+    });
+  };
+  const sortedIncomeCats = sortCategories(incomeCategories);
+  const sortedExpenseCats = sortCategories(expenseCategories);
+
   // BUSCA DADOS DO FIREBASE EM TEMPO REAL
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -323,7 +333,7 @@ function DashboardApp({ userProfile }) {
       setFormData({ amount: transaction.amount, type: transaction.type, date: transaction.date, category: cat, customDescription: customDesc, paymentMethod: transaction.paymentMethod });
       setEditingId(transaction.id);
     } else {
-      setFormData({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: expenseCategories[0] || '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
+      setFormData({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: sortedExpenseCats[0] || '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
       setEditingId(null);
     }
     setIsModalOpen(true);
@@ -332,7 +342,7 @@ function DashboardApp({ userProfile }) {
   const handleCloseModal = () => { setIsModalOpen(false); setEditingId(null); };
 
   const handleFormChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  const handleTypeToggle = (newType) => setFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (incomeCategories[0] || '') : (expenseCategories[0] || ''), customDescription: '' }));
+  const handleTypeToggle = (newType) => setFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (sortedIncomeCats[0] || '') : (sortedExpenseCats[0] || ''), customDescription: '' }));
 
   const handleSaveTransaction = async (e) => {
     e.preventDefault();
@@ -473,7 +483,10 @@ function DashboardApp({ userProfile }) {
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
   }, [transactions, filterPeriod, customDateStart, customDateEnd, filterCategory]);
 
-  const usedCategoriesInPeriod = useMemo(() => Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean), [filteredTransactions]);
+  const usedCategoriesInPeriod = useMemo(() => {
+    const categoriesSet = Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean);
+    return sortCategories(categoriesSet);
+  }, [filteredTransactions]);
 
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) return; 
@@ -539,7 +552,7 @@ function DashboardApp({ userProfile }) {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-6 rounded-2xl shadow-md bg-slate-800 text-white border border-slate-700">
+          <div className="p-6 rounded-2xl shadow-md text-white bg-[#000066]">
             <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p>
             <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
           </div>
@@ -676,7 +689,7 @@ function DashboardApp({ userProfile }) {
             <button onClick={() => handleOpenCategoryModal('income')} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
           </div>
           <div className="space-y-2">
-            {incomeCategories.map(cat => (
+            {sortedIncomeCats.map(cat => (
               <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 border border-slate-100 transition-colors">
                 <span className="font-medium text-slate-700">{cat}</span>
                 {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
@@ -695,7 +708,7 @@ function DashboardApp({ userProfile }) {
             <button onClick={() => handleOpenCategoryModal('expense')} className="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
           </div>
           <div className="space-y-2">
-            {expenseCategories.map(cat => (
+            {sortedExpenseCats.map(cat => (
               <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 border border-slate-100 transition-colors">
                 <span className="font-medium text-slate-700">{cat}</span>
                 {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
@@ -886,7 +899,7 @@ function DashboardApp({ userProfile }) {
              <div className="p-6">
                 <form onSubmit={handleSaveTransaction}>
                   <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${formData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Entrada (+)</button><button type="button" onClick={() => handleTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${formData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>Saída (-)</button></div>
-                  <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? incomeCategories : expenseCategories} />
+                  <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
                   {formData.category.toLowerCase().includes('outros') && (
                     <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                       <Input label="O que foi? (Breve descrição)" name="customDescription" value={formData.customDescription} onChange={handleFormChange} placeholder="Ex: Feira, Assinatura de Revista..." required />
