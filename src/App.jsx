@@ -1178,10 +1178,22 @@ function DashboardApp({ userProfile }) {
                       const newDays = currentDays <= 0 ? 30 : currentDays + 30;
                       setAdminEditModal({...adminEditModal, daysRemaining: newDays});
                    }} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
-                     +30 Dias
+                      +30 Dias
                    </button>
                 </div>
-                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={['Free', 'Básico', 'Pro', 'Admin']} required />
+                <Select 
+                   label="Novo Plano" 
+                   name="plan" 
+                   value={adminEditModal.plan} 
+                   onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} 
+                   options={[
+                     { value: 'Free', label: 'Free' },
+                     { value: 'Básico', label: 'Básico (R$ 9,90/mês)' },
+                     { value: 'Pro', label: 'Pro (R$ 19,90/mês)' },
+                     { value: 'Admin', label: 'Admin (Vitalício)' }
+                   ]} 
+                   required 
+                />
                 <Input label="Dias Restantes (Digite manualmente se necessário)" name="daysRemaining" type="number" inputMode="numeric" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
                 <p className="text-xs text-slate-500 mt-[-10px] mb-4">* Digite um número muito alto (ex: 999) para tornar o acesso vitalício.</p>
                 <div className="mt-6 flex gap-3"><button type="button" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
