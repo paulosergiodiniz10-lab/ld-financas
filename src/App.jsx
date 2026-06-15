@@ -492,13 +492,15 @@ function DashboardApp({ userProfile }) {
     }, { income: 0, expense: 0 });
     const balance = totals.income - totals.expense;
     const recent = filteredTransactions.slice(0, 8); 
-    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
     
-    const categoryData = expenseTransactions.reduce((acc, tx) => { acc[tx.category] = (acc[tx.category] || 0) + parseFloat(tx.amount); return acc; }, {});
-    const sortedCategories = Object.entries(categoryData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const incomeTransactions = filteredTransactions.filter(t => t.type === 'income');
+    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
 
-    const paymentData = expenseTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
-    const sortedPayments = Object.entries(paymentData).sort((a, b) => b[1] - a[1]);
+    const incomePaymentData = incomeTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
+    const sortedIncomePayments = Object.entries(incomePaymentData).sort((a, b) => b[1] - a[1]);
+
+    const expensePaymentData = expenseTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
+    const sortedExpensePayments = Object.entries(expensePaymentData).sort((a, b) => b[1] - a[1]);
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -545,36 +547,36 @@ function DashboardApp({ userProfile }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
            <div className="space-y-6">
              <Card className="p-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><Tag className="text-orange-500" size={20}/> Onde foi o seu dinheiro?</h3>
-                {sortedCategories.length > 0 ? (
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-emerald-500" size={20}/> Formas de Pagamento (Entradas)</h3>
+                {sortedIncomePayments.length > 0 ? (
                   <div className="space-y-5">
-                    {sortedCategories.map(([cat, val]) => {
-                      const percent = ((val / totals.expense) * 100).toFixed(1);
+                    {sortedIncomePayments.map(([method, val]) => {
+                      const percent = ((val / totals.income) * 100).toFixed(1);
                       return (
-                        <div key={cat}>
-                          <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{cat}</span><span className="font-bold text-slate-800 text-red-600">-R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
-                          <div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-orange-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
+                        <div key={method}>
+                          <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-slate-800 text-emerald-600">+R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
+                          <div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-emerald-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
                         </div>
                       )
                     })}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma entrada registrada.</p>)}
              </Card>
              <Card className="p-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-indigo-500" size={20}/> Formas de Pagamento (Saídas)</h3>
-                {sortedPayments.length > 0 ? (
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-red-500" size={20}/> Formas de Pagamento (Saídas)</h3>
+                {sortedExpensePayments.length > 0 ? (
                   <div className="space-y-5">
-                    {sortedPayments.map(([method, val]) => {
+                    {sortedExpensePayments.map(([method, val]) => {
                       const percent = ((val / totals.expense) * 100).toFixed(1);
                       return (
                         <div key={method}>
                           <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-slate-800 text-red-600">-R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
-                          <div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-indigo-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
+                          <div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-red-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
                         </div>
                       )
                     })}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registrada.</p>)}
              </Card>
            </div>
            <Card className="p-6 flex flex-col h-full">
