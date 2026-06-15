@@ -373,8 +373,6 @@ function DashboardApp({ userProfile }) {
     handleCloseModal();
   };
 
-  const requestDeleteTransaction = (id) => openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir?', async () => { await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id)); closeConfirm(); });
-
   const handleOpenBillModal = (bill = null) => {
     if (bill) {
       setBillFormData({ title: bill.title, amount: bill.amount, type: bill.type, dueDate: bill.dueDate, category: bill.category, recurrenceMonths: 1 });
@@ -414,58 +412,58 @@ function DashboardApp({ userProfile }) {
     e.preventDefault();
     const finalPaidAmount = parseAmountToFloat(payFormData.finalAmount);
     const bill = payBillModal.bill;
-    const newTx = { amount: finalPaidAmount, type: bill.type, date: payFormData.paymentDate, category: `${bill.category} (${bill.title})`, paymentMethod: payFormData.paymentMethod, updatedAt: new Date().toISOString() };
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', Date.now().toString()), newTx);
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', bill.id), { status: 'paid', paymentDate: payFormData.paymentDate, paidAmount: finalPaidAmount }, { merge: true });
+    
+    // 1. Gera um ID único para o Lançamento que vai nascer agora
+    const newTransactionId = Date.now().toString();
+
+    // 2. Prepara o Lançamento para o Caixa Geral, salvando também o ID da Conta Original
+    const newTx = { 
+      amount: finalPaidAmount, 
+      type: bill.type, 
+      date: payFormData.paymentDate, 
+      category: `${bill.category} (${bill.title})`, 
+      paymentMethod: payFormData.paymentMethod, 
+      updatedAt: new Date().toISOString(),
+      originBillId: bill.id // <--- LIGAÇÃO CRIADA AQUI
+    };
+    
+    // 3. Salva no Firebase
+    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', newTransactionId), newTx);
+    
+    // 4. Marca a conta como Paga E salva qual foi o ID do Lançamento que ela gerou
+    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', bill.id), { 
+      status: 'paid', 
+      paymentDate: payFormData.paymentDate, 
+      paidAmount: finalPaidAmount,
+      generatedTransactionId: newTransactionId // <--- LIGAÇÃO REVERSA CRIADA AQUI
+    }, { merge: true });
+    
     setPayBillModal({ isOpen: false, bill: null });
   };
 
-  const handleOpenCategoryModal = (type, categoryName = null) => setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
+  const requestDeleteTransaction = (id) => {
+    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? Isso afetará o seu saldo.', async () => {
+        // 1. Antes de excluir, o sistema precisa achar esse Lançamento na memória para ver se ele veio de uma Conta a Pagar
+        const txToDelete = transactions.find(t => t.id === id);
 
-  const handleSaveCategory = async (e) => {
-    e.preventDefault();
-    const { originalName, currentName, type } = categoryModal;
-    const trimmedName = currentName.trim();
-    if (!trimmedName) return;
-    let updatedIncomes = [...incomeCategories];
-    let updatedExpenses = [...expenseCategories];
-    if (type === 'income') {
-      if (originalName) updatedIncomes = updatedIncomes.map(c => c === originalName ? trimmedName : c);
-      else if (!updatedIncomes.includes(trimmedName)) updatedIncomes.push(trimmedName);
-    } else {
-      if (originalName) updatedExpenses = updatedExpenses.map(c => c === originalName ? trimmedName : c);
-      else if (!updatedExpenses.includes(trimmedName)) updatedExpenses.push(trimmedName);
-    }
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
-    setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
-  };
+        // 2. Exclui o Lançamento do Caixa Geral no Firebase
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
 
-  const requestDeleteCategory = (categoryName, type) => {
-    openConfirm('Excluir Categoria', `Tem certeza que deseja excluir "${categoryName}"?`, async () => {
-        let updatedIncomes = [...incomeCategories];
-        let updatedExpenses = [...expenseCategories];
-        if (type === 'income') updatedIncomes = updatedIncomes.filter(c => c !== categoryName);
-        else updatedExpenses = updatedExpenses.filter(c => c !== categoryName);
-        await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
+        // 3. Se este lançamento veio de um agendamento, reverte o agendamento para pendente!
+        if (txToDelete && txToDelete.originBillId) {
+            await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId), { 
+              status: 'pending', 
+              paymentDate: null, 
+              paidAmount: null,
+              generatedTransactionId: null
+            }, { merge: true });
+        }
+
         closeConfirm();
     });
   };
 
-  const handleToggleUserStatus = (user) => {
-    const isCurrentlyActive = user.status === 'Ativo';
-    setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
-  };
-
-  const handleDeleteAdminUser = (user) => openConfirm('Excluir Cliente', `Tem certeza absoluta que deseja excluir a conta de ${user.name}? Todos os dados financeiros dele serão perdidos.`, async () => { await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid)); closeConfirm(); });
-
-  const handleOpenAdminEdit = (user) => setAdminEditModal({ isOpen: true, user: user, plan: user.plan || 'Free', daysRemaining: user.daysRemaining || 0 });
-
-  const handleSaveAdminEdit = async (e) => {
-    e.preventDefault();
-    let parsedDays = parseInt(adminEditModal.daysRemaining);
-    if (isNaN(parsedDays)) parsedDays = 0;
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid), { plan: adminEditModal.plan, daysRemaining: parsedDays }, { merge: true });
-    setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
+  const handleOpenCategoryModal = (type, categoryName = null) => {
   };
 
   const dateFilterLogic = (itemDateString, periodStr, customStart, customEnd, fMonth, fYear) => {
