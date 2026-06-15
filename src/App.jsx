@@ -52,7 +52,6 @@ const CardIcon = CreditCard;
 const AlertTriangle = (p) => <IconWrapper name="warning" {...p} />;
 const Lock = (p) => <IconWrapper name="lock" {...p} />;
 const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
-const Crown = (p) => <IconWrapper name="workspace_premium" {...p} />;
 
 // --- CONFIGURAÇÕES DO SISTEMA ---
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
@@ -262,22 +261,13 @@ function DashboardApp({ userProfile }) {
   const [formData, setFormData] = useState({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
-  const [editingAdminUser, setEditingAdminUser] = useState(null);
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
-  // CONSTANTES DERIVADAS DO PERFIL (Para saber se é o Dono do Sistema)
-  const isAdmin = userProfile?.email === ADMIN_EMAIL || userProfile?.plan === 'Admin';
-
   // BUSCA DADOS DO FIREBASE EM TEMPO REAL
   useEffect(() => {
     if (!userProfile?.uid) return;
-
-    // Segurança extra: se a view for admin e o usuário não for admin, volta pro início
-    if (currentView === 'admin' && !isAdmin) {
-      setCurrentView('dashboard');
-    }
 
     // Puxa Lançamentos
     const txRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions');
@@ -301,7 +291,7 @@ function DashboardApp({ userProfile }) {
 
     // Se for ADMIN, puxa todos os clientes
     let unsubUsers = () => {};
-    if (isAdmin) {
+    if (userProfile.email === ADMIN_EMAIL) {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => {
              const data = snapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -310,7 +300,7 @@ function DashboardApp({ userProfile }) {
     }
 
     return () => { unsubTx(); unsubCat(); unsubUsers(); }
-  }, [userProfile?.uid, isAdmin, currentView]);
+  }, [userProfile?.uid]);
 
   const handleLogout = () => {
     openConfirm('Sair do Sistema', 'Tem certeza que deseja encerrar a sua sessão?', () => {
@@ -418,30 +408,30 @@ function DashboardApp({ userProfile }) {
     });
   };
 
-  // Funções Diretas do Painel Administrativo
-  const handleToggleUserStatus = async (user) => {
+  const handleToggleUserStatus = (user) => {
     const isCurrentlyActive = user.status === 'Ativo';
+    const actionText = isCurrentlyActive ? 'bloquear' : 'ativar';
     const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-    // Bloqueia ou Ativa instantaneamente sem perguntar
-    await setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
+    setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
   };
 
   const handleDeleteAdminUser = (user) => {
-    openConfirm('Excluir Empresa', `Tem certeza que deseja excluir a conta de "${user.name}" permanentemente? Todos os dados dele serão apagados.`, async () => {
-        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid));
+    openConfirm('Excluir Cliente', `Tem certeza absoluta que deseja excluir a conta de ${user.name}? Todos os dados financeiros dele serão perdidos.`, async () => {
+        const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
+        await deleteDoc(userRef);
         closeConfirm();
     });
   };
 
-  const handleSaveAdminUser = async (e) => {
-    e.preventDefault();
-    if (!editingAdminUser) return;
-    const userRef = doc(db, 'artifacts', APP_ID, 'users', editingAdminUser.uid);
-    await setDoc(userRef, { 
-        plan: editingAdminUser.plan,
-        daysRemaining: parseInt(editingAdminUser.daysRemaining) || 0
-    }, { merge: true });
-    setEditingAdminUser(null);
+  const setEditingAdminUser = (user) => {
+    const newPlan = prompt(`Editar Plano de ${user.name}\nDigite o novo plano (Ex: Pro, Free):`, user.plan);
+    if (newPlan !== null) {
+      const newDays = prompt(`Editar Dias Restantes de ${user.name}\nDigite a quantidade de dias (Ex: 30, 365):`, user.daysRemaining);
+      if (newDays !== null && !isNaN(parseInt(newDays))) {
+        const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
+        setDoc(userRef, { plan: newPlan, daysRemaining: parseInt(newDays) }, { merge: true });
+      }
+    }
   };
 
   const filteredTransactions = useMemo(() => {
@@ -493,13 +483,20 @@ function DashboardApp({ userProfile }) {
     const balance = totals.income - totals.expense;
     const recent = filteredTransactions.slice(0, 8); 
     
+    // Calcula Formas de Pagamento (Entradas)
     const incomeTransactions = filteredTransactions.filter(t => t.type === 'income');
-    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
-
-    const incomePaymentData = incomeTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
+    const incomePaymentData = incomeTransactions.reduce((acc, tx) => { 
+        acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); 
+        return acc; 
+    }, {});
     const sortedIncomePayments = Object.entries(incomePaymentData).sort((a, b) => b[1] - a[1]);
 
-    const expensePaymentData = expenseTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
+    // Calcula Formas de Pagamento (Saídas)
+    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
+    const expensePaymentData = expenseTransactions.reduce((acc, tx) => { 
+        acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); 
+        return acc; 
+    }, {});
     const sortedExpensePayments = Object.entries(expensePaymentData).sort((a, b) => b[1] - a[1]);
 
     return (
@@ -551,7 +548,7 @@ function DashboardApp({ userProfile }) {
                 {sortedIncomePayments.length > 0 ? (
                   <div className="space-y-5">
                     {sortedIncomePayments.map(([method, val]) => {
-                      const percent = ((val / totals.income) * 100).toFixed(1);
+                      const percent = totals.income > 0 ? ((val / totals.income) * 100).toFixed(1) : 0;
                       return (
                         <div key={method}>
                           <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-slate-800 text-emerald-600">+R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
@@ -560,14 +557,14 @@ function DashboardApp({ userProfile }) {
                       )
                     })}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma entrada registrada.</p>)}
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma entrada registada.</p>)}
              </Card>
              <Card className="p-6">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-red-500" size={20}/> Formas de Pagamento (Saídas)</h3>
                 {sortedExpensePayments.length > 0 ? (
                   <div className="space-y-5">
                     {sortedExpensePayments.map(([method, val]) => {
-                      const percent = ((val / totals.expense) * 100).toFixed(1);
+                      const percent = totals.expense > 0 ? ((val / totals.expense) * 100).toFixed(1) : 0;
                       return (
                         <div key={method}>
                           <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-slate-800 text-red-600">-R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
@@ -576,7 +573,7 @@ function DashboardApp({ userProfile }) {
                       )
                     })}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registrada.</p>)}
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
              </Card>
            </div>
            <Card className="p-6 flex flex-col h-full">
@@ -728,41 +725,34 @@ function DashboardApp({ userProfile }) {
   );
 
   const renderPlans = () => {
+    const isAdmin = userProfile.email === ADMIN_EMAIL;
+
     // SE FOR O ADMINISTRADOR, MOSTRA O PAINEL VIP DOURADO VITALÍCIO
     if (isAdmin) {
       return (
         <div className="space-y-6 animate-in fade-in duration-500">
           <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
-          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-500 bg-amber-50/10">
-            <div className="flex items-center justify-between border-b border-amber-100 pb-6 mb-6">
+          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-400 bg-amber-50/30">
+            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6">
                 <div>
-                  <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <Crown size={16} className="text-amber-500" /> Plano Atual
-                  </p>
-                  <h3 className="text-3xl font-black text-slate-800 flex items-center gap-2">
-                    Admin
-                  </h3>
+                  <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-base">workspace_premium</span> Plano Atual</p>
+                  <h3 className="text-3xl font-black text-slate-800">Admin</h3>
                 </div>
                 <div className="text-right">
-                  <span className={`inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700 border border-amber-200 shadow-sm`}>
-                    Ativo
-                  </span>
-                  <p className="text-sm text-slate-500 mt-2 font-bold tracking-wide uppercase">Vitalício</p>
+                  <span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span>
+                  <p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p>
                 </div>
             </div>
-            <div className="text-center py-6">
-               <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500">
-                  <Crown size={40} />
-               </div>
-               <h4 className="text-xl font-bold text-slate-800 mb-2">Conta de Administrador</h4>
-               <p className="text-slate-600 max-w-md mx-auto">Você tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
+            <div className="text-center py-8">
+               <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div>
+               <h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4>
+               <p className="text-slate-600">Você tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
             </div>
           </Card>
         </div>
       );
     }
 
-    // SE FOR UM CLIENTE NORMAL, MOSTRA O PAINEL VERDE COM DIAS RESTANTES
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
@@ -833,16 +823,6 @@ function DashboardApp({ userProfile }) {
 
   const NavItem = ({ id, icon: Icon, label }) => {
     const isActive = currentView === id;
-    
-    // VISUAL DO BOTÃO ADMIN DESTACADO NO MENU LATERAL
-    if (id === 'admin' && isAdmin) {
-      return (
-        <button onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-bold ${isActive ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}>
-          <ShieldAlert size={20} className={isActive ? 'text-amber-400' : 'text-slate-400'} />{label}
-        </button>
-      );
-    }
-
     return (
       <button onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>
         <Icon size={20} className={isActive ? 'text-emerald-600' : 'text-slate-400'} />{label}
@@ -856,44 +836,27 @@ function DashboardApp({ userProfile }) {
       <aside className={`fixed md:sticky top-0 left-0 h-[100dvh] w-72 bg-white border-r border-slate-200 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-6 hidden md:flex items-center gap-2 font-black text-2xl text-slate-800 tracking-tight border-b border-slate-100"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS</div>
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
-          <NavItem id="dashboard" icon={Home} label="Início" />
-          <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
-          <NavItem id="categories" icon={Tag} label="Categorias" />
-          <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
-          <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
-          <NavItem id="support" icon={HelpCircle} label="Suporte" />
-          
-          {/* SEPARAÇÃO VISUAL DO MENU ADMIN */}
-          {isAdmin && (
-            <div className="pt-4 mt-6 border-t border-slate-100">
-              <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Gestão do SaaS</p>
-              <NavItem id="admin" icon={ShieldAlert} label="Administração" />
-            </div>
-          )}
+          <NavItem id="dashboard" icon={Home} label="Início" /><NavItem id="transactions" icon={Wallet} label="Lançamentos" /><NavItem id="categories" icon={Tag} label="Categorias" /><NavItem id="plans" icon={CreditCard} label="Meu Plano" /><NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" /><NavItem id="support" icon={HelpCircle} label="Suporte" />
+          {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${isAdmin ? 'bg-slate-800 text-amber-400 shadow-sm' : 'text-emerald-600 bg-emerald-50'}`}>{isAdmin ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{isAdmin || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.email === ADMIN_EMAIL || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
           <button type="button" onClick={handleLogout} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 hover:border-red-100 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
         </div>
       </aside>
       {isMobileMenuOpen && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />)}
       <main className="flex-1 w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-10 pb-24 overflow-x-hidden">
         {userProfile.status === 'Bloqueado' ? (
-          <div className="max-w-md mx-auto mt-16 p-8 bg-white rounded-3xl shadow-xl border border-red-100 text-center animate-in fade-in zoom-in-95 duration-500">
-            <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Lock size={40} />
-            </div>
-            <h2 className="text-2xl font-black text-slate-800 mb-2">Acesso Restrito</h2>
-            <p className="text-slate-600 mb-8 font-medium">A sua conta foi bloqueada temporariamente ou a sua assinatura expirou.</p>
-            
-            <div className="space-y-3">
-              <a href="https://wa.me/5564981005505?text=Olá, o meu acesso ao LD Finanças está bloqueado. Pode ajudar-me?" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-4 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors active:scale-[0.98]">
-                <span className="material-symbols-outlined">chat</span> Falar com Suporte (WhatsApp)
-              </a>
-              <button onClick={handleLogout} className="flex items-center justify-center gap-2 w-full bg-slate-100 text-slate-700 font-bold px-6 py-4 rounded-xl hover:bg-slate-200 transition-colors active:scale-[0.98]">
-                <LogOut size={20} /> Sair da Conta
-              </button>
-            </div>
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-white rounded-3xl border border-red-100 shadow-sm mt-10">
+             <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
+                <Lock size={40} />
+             </div>
+             <h2 className="text-2xl font-bold text-slate-800 mb-2">Acesso Bloqueado</h2>
+             <p className="text-slate-600 mb-8 max-w-md mx-auto">A sua conta encontra-se temporariamente suspensa ou o seu plano expirou. Por favor, entre em contato com o suporte para reativar o seu acesso e continuar a gerenciar as suas finanças.</p>
+             <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, minha conta está bloqueada no LD Finanças e preciso de ajuda.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
+                <Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair da Conta</Button>
+             </div>
           </div>
         ) : (
           <>
@@ -902,7 +865,6 @@ function DashboardApp({ userProfile }) {
         )}
       </main>
 
-      {/* MODAL DE LANÇAMENTO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
@@ -927,7 +889,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE CATEGORIA */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })}></div>
@@ -941,22 +902,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL EDITAR PLANO DO CLIENTE (ADMIN) */}
-      {editingAdminUser && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEditingAdminUser(null)}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><ShieldAlert className="text-slate-400" size={24}/>Alterar Plano</h3><button onClick={() => setEditingAdminUser(null)} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveAdminUser} className="p-6">
-                <Select label="Plano do Cliente" name="plan" value={editingAdminUser.plan} onChange={(e) => setEditingAdminUser({...editingAdminUser, plan: e.target.value})} options={['Free', 'Pro', 'Admin']} required />
-                <Input label="Dias Restantes (999 para Vitalício)" name="daysRemaining" type="number" value={editingAdminUser.daysRemaining} onChange={(e) => setEditingAdminUser({...editingAdminUser, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setEditingAdminUser(null)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
-             </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE CONFIRMAÇÃO (LIXEIRA, BLOQUEIO, ETC) */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
