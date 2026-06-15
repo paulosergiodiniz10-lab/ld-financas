@@ -60,6 +60,15 @@ const PendingIcon = (p) => <IconWrapper name="pending_actions" {...p} />;
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
+const MONTHS_OPTIONS = [
+  { val: '0', label: 'Janeiro' }, { val: '1', label: 'Fevereiro' }, { val: '2', label: 'Março' },
+  { val: '3', label: 'Abril' }, { val: '4', label: 'Maio' }, { val: '5', label: 'Junho' },
+  { val: '6', label: 'Julho' }, { val: '7', label: 'Agosto' }, { val: '8', label: 'Setembro' },
+  { val: '9', label: 'Outubro' }, { val: '10', label: 'Novembro' }, { val: '11', label: 'Dezembro' }
+];
+
+const YEARS_OPTIONS = Array.from({length: 10}, (_, i) => new Date().getFullYear() - 2 + i);
+
 // --- UTILITÁRIOS ---
 const formatNumber = (value) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -92,7 +101,6 @@ const Button = ({ children, onClick, variant = 'primary', className = '', type =
 const Input = ({ label, name, type = 'text', value, onChange, placeholder, required = false, step, rightElement, inputMode, min, max }) => {
   const handleChange = (e) => {
     let newValue = e.target.value;
-    // Escrita livre! Sem formatar letras automaticamente.
     if (onChange) onChange({ target: { name, value: newValue } });
   };
   return (
@@ -144,7 +152,6 @@ const Auth = () => {
       } else {
         const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const user = userCred.user;
-        // Salva os dados extras do utilizador na base de dados
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), {
           name: formData.name || 'Novo Usuário',
           whatsapp: formData.whatsapp,
@@ -247,7 +254,7 @@ function DashboardApp({ userProfile }) {
 
   // Estados dos Dados
   const [transactions, setTransactions] = useState([]);
-  const [bills, setBills] = useState([]); // NOVO: Contas a Pagar e Receber
+  const [bills, setBills] = useState([]);
   const [incomeCategories, setIncomeCategories] = useState(['Outros']);
   const [expenseCategories, setExpenseCategories] = useState(['Outros']);
   const [adminUsers, setAdminUsers] = useState([]);
@@ -257,28 +264,27 @@ function DashboardApp({ userProfile }) {
   const [filterCategory, setFilterCategory] = useState('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
+  
+  // Novos Filtros por Mês Específico
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth().toString());
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
 
-  // Modais de Lançamentos Diários
+  // Modais
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0] });
-  
-  // Modais de Categorias e Admin
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
-
-  // NOVO: Modais para Contas a Pagar/Receber
   const [billModal, setBillModal] = useState({ isOpen: false, id: null });
   const [billFormData, setBillFormData] = useState({ title: '', amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', recurrenceMonths: 1 });
   const [payBillModal, setPayBillModal] = useState({ isOpen: false, bill: null });
   const [payFormData, setPayFormData] = useState({ finalAmount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: PAYMENT_METHODS[0] });
 
-
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
-  // ORDENAÇÃO DAS CATEGORIAS ("Outros" sempre no topo, restante alfabético)
+  // ORDENAÇÃO DAS CATEGORIAS
   const sortCategories = (cats) => {
     return [...cats].sort((a, b) => {
       if (a.toLowerCase() === 'outros') return -1;
@@ -289,24 +295,20 @@ function DashboardApp({ userProfile }) {
   const sortedIncomeCats = sortCategories(incomeCategories);
   const sortedExpenseCats = sortCategories(expenseCategories);
 
+  // BUSCA DADOS DO FIREBASE
   useEffect(() => {
     if (!userProfile?.uid) return;
 
-    // Puxa Lançamentos Realizados
     const txRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions');
     const unsubTx = onSnapshot(txRef, (snapshot) => {
-        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setTransactions(data);
+        setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => console.error(error));
 
-    // NOVO: Puxa Contas a Pagar/Receber (Agendamentos)
     const billsRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills');
     const unsubBills = onSnapshot(billsRef, (snapshot) => {
-        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setBills(data);
+        setBills(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => console.error(error));
 
-    // Puxa Categorias
     const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
     const unsubCat = onSnapshot(catRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -318,25 +320,18 @@ function DashboardApp({ userProfile }) {
         }
     }, (error) => console.error(error));
 
-    // Puxa Administrador
     let unsubUsers = () => {};
     if (userProfile.email === ADMIN_EMAIL) {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => {
-             const data = snapshot.docs.map(d => ({ uid: d.id, ...d.data() }));
-             setAdminUsers(data);
+             setAdminUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() })));
         });
     }
 
     return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid]);
 
-  const handleLogout = () => {
-    openConfirm('Sair do Sistema', 'Tem certeza que deseja encerrar a sua sessão?', () => {
-      signOut(auth);
-      closeConfirm();
-    });
-  };
+  const handleLogout = () => openConfirm('Sair do Sistema', 'Tem certeza que deseja encerrar a sua sessão?', () => { signOut(auth); closeConfirm(); });
 
   const handleOpenModal = (transaction = null) => {
     if (transaction) {
@@ -354,9 +349,7 @@ function DashboardApp({ userProfile }) {
     }
     setIsModalOpen(true);
   };
-
   const handleCloseModal = () => { setIsModalOpen(false); setEditingId(null); };
-
   const handleFormChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const handleTypeToggle = (newType) => setFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (sortedIncomeCats[0] || '') : (sortedExpenseCats[0] || ''), customDescription: '' }));
 
@@ -369,29 +362,18 @@ function DashboardApp({ userProfile }) {
   const handleSaveTransaction = async (e) => {
     e.preventDefault();
     if (!formData.category || !formData.amount) return;
-    
     let finalCategory = formData.category;
     if (formData.category.toLowerCase().includes('outros') && formData.customDescription.trim()) {
        finalCategory = `${formData.category} (${formData.customDescription.trim()})`;
     }
-    
     const finalAmount = parseAmountToFloat(formData.amount);
     const idToSave = editingId || Date.now().toString();
-    const newTx = { 
-        amount: finalAmount, type: formData.type, date: formData.date, 
-        category: finalCategory, paymentMethod: formData.paymentMethod, updatedAt: new Date().toISOString()
-    };
-    
+    const newTx = { amount: finalAmount, type: formData.type, date: formData.date, category: finalCategory, paymentMethod: formData.paymentMethod, updatedAt: new Date().toISOString() };
     await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', idToSave), newTx);
     handleCloseModal();
   };
 
-  const requestDeleteTransaction = (id) => {
-    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? Isso afetará o seu saldo.', async () => {
-        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
-        closeConfirm();
-    });
-  };
+  const requestDeleteTransaction = (id) => openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir?', async () => { await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id)); closeConfirm(); });
 
   const handleOpenBillModal = (bill = null) => {
     if (bill) {
@@ -402,47 +384,27 @@ function DashboardApp({ userProfile }) {
       setBillModal({ isOpen: true, id: null });
     }
   };
-
   const handleBillTypeToggle = (newType) => setBillFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (sortedIncomeCats[0] || '') : (sortedExpenseCats[0] || '') }));
 
   const handleSaveBill = async (e) => {
     e.preventDefault();
     if (!billFormData.title || !billFormData.amount) return;
-    
     const finalAmount = parseAmountToFloat(billFormData.amount);
-    const months = billModal.id ? 1 : (parseInt(billFormData.recurrenceMonths) || 1); // Se edita, não repete. Se cria, repete.
-    let currentDate = new Date(billFormData.dueDate + 'T12:00:00'); // Evita bug de fuso horário
-
+    const months = billModal.id ? 1 : (parseInt(billFormData.recurrenceMonths) || 1);
+    let currentDate = new Date(billFormData.dueDate + 'T12:00:00'); 
     for(let i=0; i<months; i++) {
         const idToSave = billModal.id || (Date.now() + i).toString();
-        
         const nextDate = new Date(currentDate);
         nextDate.setMonth(currentDate.getMonth() + i);
         const formattedDate = nextDate.toISOString().split('T')[0];
-
-        const newBill = { 
-            title: billFormData.title, 
-            amount: finalAmount, 
-            type: billFormData.type, 
-            dueDate: formattedDate, 
-            category: billFormData.category, 
-            status: 'pending', // pendente por padrão
-            createdAt: new Date().toISOString()
-        };
-        
+        const newBill = { title: billFormData.title, amount: finalAmount, type: billFormData.type, dueDate: formattedDate, category: billFormData.category, status: 'pending', createdAt: new Date().toISOString() };
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', idToSave), newBill);
     }
     setBillModal({ isOpen: false, id: null });
   };
 
-  const requestDeleteBill = (id) => {
-    openConfirm('Excluir Previsão', 'Tem certeza que deseja excluir esta conta agendada?', async () => {
-        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', id));
-        closeConfirm();
-    });
-  };
+  const requestDeleteBill = (id) => openConfirm('Excluir Previsão', 'Tem certeza que deseja excluir esta conta agendada?', async () => { await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', id)); closeConfirm(); });
 
-  // Funções para Baixar (Pagar/Receber) a conta
   const handleOpenPayBillModal = (bill) => {
     setPayFormData({ finalAmount: bill.amount, paymentDate: new Date().toISOString().split('T')[0], paymentMethod: PAYMENT_METHODS[0] });
     setPayBillModal({ isOpen: true, bill: bill });
@@ -452,42 +414,21 @@ function DashboardApp({ userProfile }) {
     e.preventDefault();
     const finalPaidAmount = parseAmountToFloat(payFormData.finalAmount);
     const bill = payBillModal.bill;
-
-    // 1. Cria a Transação no Caixa Diário (Isso soma no saldo geral)
-    const newTx = { 
-        amount: finalPaidAmount, 
-        type: bill.type, 
-        date: payFormData.paymentDate, 
-        category: `${bill.category} (${bill.title})`, // Registra no caixa com o nome da conta
-        paymentMethod: payFormData.paymentMethod, 
-        updatedAt: new Date().toISOString()
-    };
+    const newTx = { amount: finalPaidAmount, type: bill.type, date: payFormData.paymentDate, category: `${bill.category} (${bill.title})`, paymentMethod: payFormData.paymentMethod, updatedAt: new Date().toISOString() };
     await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', Date.now().toString()), newTx);
-
-    // 2. Atualiza a Conta como Paga
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', bill.id), { 
-      status: 'paid', 
-      paymentDate: payFormData.paymentDate, 
-      paidAmount: finalPaidAmount 
-    }, { merge: true });
-
+    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', bill.id), { status: 'paid', paymentDate: payFormData.paymentDate, paidAmount: finalPaidAmount }, { merge: true });
     setPayBillModal({ isOpen: false, bill: null });
   };
 
-
-  const handleOpenCategoryModal = (type, categoryName = null) => {
-    setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
-  };
+  const handleOpenCategoryModal = (type, categoryName = null) => setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
 
   const handleSaveCategory = async (e) => {
     e.preventDefault();
     const { originalName, currentName, type } = categoryModal;
     const trimmedName = currentName.trim();
     if (!trimmedName) return;
-    
     let updatedIncomes = [...incomeCategories];
     let updatedExpenses = [...expenseCategories];
-
     if (type === 'income') {
       if (originalName) updatedIncomes = updatedIncomes.map(c => c === originalName ? trimmedName : c);
       else if (!updatedIncomes.includes(trimmedName)) updatedIncomes.push(trimmedName);
@@ -495,9 +436,7 @@ function DashboardApp({ userProfile }) {
       if (originalName) updatedExpenses = updatedExpenses.map(c => c === originalName ? trimmedName : c);
       else if (!updatedExpenses.includes(trimmedName)) updatedExpenses.push(trimmedName);
     }
-    
-    const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
-    await setDoc(catRef, { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
+    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
     setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   };
 
@@ -505,54 +444,36 @@ function DashboardApp({ userProfile }) {
     openConfirm('Excluir Categoria', `Tem certeza que deseja excluir "${categoryName}"?`, async () => {
         let updatedIncomes = [...incomeCategories];
         let updatedExpenses = [...expenseCategories];
-        
         if (type === 'income') updatedIncomes = updatedIncomes.filter(c => c !== categoryName);
         else updatedExpenses = updatedExpenses.filter(c => c !== categoryName);
-
-        const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
-        await setDoc(catRef, { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
+        await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
         closeConfirm();
     });
   };
 
   const handleToggleUserStatus = (user) => {
     const isCurrentlyActive = user.status === 'Ativo';
-    const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-    setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
+    setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
   };
 
-  const handleDeleteAdminUser = (user) => {
-    openConfirm('Excluir Cliente', `Tem certeza absoluta que deseja excluir a conta de ${user.name}? Todos os dados financeiros dele serão perdidos.`, async () => {
-        const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-        await deleteDoc(userRef);
-        closeConfirm();
-    });
-  };
+  const handleDeleteAdminUser = (user) => openConfirm('Excluir Cliente', `Tem certeza absoluta que deseja excluir a conta de ${user.name}? Todos os dados financeiros dele serão perdidos.`, async () => { await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid)); closeConfirm(); });
 
-  const handleOpenAdminEdit = (user) => {
-    setAdminEditModal({
-      isOpen: true,
-      user: user,
-      plan: user.plan || 'Free',
-      daysRemaining: user.daysRemaining || 0
-    });
-  };
+  const handleOpenAdminEdit = (user) => setAdminEditModal({ isOpen: true, user: user, plan: user.plan || 'Free', daysRemaining: user.daysRemaining || 0 });
 
   const handleSaveAdminEdit = async (e) => {
     e.preventDefault();
     let parsedDays = parseInt(adminEditModal.daysRemaining);
     if (isNaN(parsedDays)) parsedDays = 0;
-
-    const userRef = doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid);
-    await setDoc(userRef, { plan: adminEditModal.plan, daysRemaining: parsedDays }, { merge: true });
+    await setDoc(doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid), { plan: adminEditModal.plan, daysRemaining: parsedDays }, { merge: true });
     setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
   };
 
-  const dateFilterLogic = (itemDateString, periodStr, customStart, customEnd) => {
+  const dateFilterLogic = (itemDateString, periodStr, customStart, customEnd, fMonth, fYear) => {
     const today = new Date(); today.setHours(0,0,0,0);
     if (periodStr === 'all') return true;
     
-    const itemTime = new Date(itemDateString + 'T00:00:00').getTime();
+    const itemDateObj = new Date(itemDateString + 'T12:00:00');
+    const itemTime = itemDateObj.getTime();
     
     if (periodStr === 'today') return itemDateString === today.toISOString().split('T')[0];
     if (periodStr === '15days') {
@@ -564,6 +485,9 @@ function DashboardApp({ userProfile }) {
        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0).getTime();
        return itemTime >= start && itemTime <= end;
     }
+    if (periodStr === 'specific_month') {
+       return itemDateObj.getMonth().toString() === fMonth && itemDateObj.getFullYear().toString() === fYear;
+    }
     if (periodStr === 'custom') {
        if (!customStart || !customEnd) return true; 
        const start = new Date(customStart + 'T00:00:00').getTime();
@@ -574,15 +498,12 @@ function DashboardApp({ userProfile }) {
   };
 
   const filteredTransactions = useMemo(() => {
-    let filtered = transactions.filter(tx => dateFilterLogic(tx.date, filterPeriod, customDateStart, customDateEnd));
+    let filtered = transactions.filter(tx => dateFilterLogic(tx.date, filterPeriod, customDateStart, customDateEnd, filterMonth, filterYear));
     if (filterCategory !== 'all') filtered = filtered.filter(tx => tx.category === filterCategory);
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
-  }, [transactions, filterPeriod, customDateStart, customDateEnd, filterCategory]);
+  }, [transactions, filterPeriod, customDateStart, customDateEnd, filterMonth, filterYear, filterCategory]);
 
-  const usedCategoriesInPeriod = useMemo(() => {
-    const categoriesSet = Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean);
-    return sortCategories(categoriesSet);
-  }, [filteredTransactions]);
+  const usedCategoriesInPeriod = useMemo(() => sortCategories(Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean)), [filteredTransactions]);
 
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) return; 
@@ -593,6 +514,33 @@ function DashboardApp({ userProfile }) {
     link.setAttribute("download", `Extrato_${filterCategory !== 'all' ? filterCategory : 'Completo'}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
+
+  const renderFilterButtons = () => (
+    <div className="bg-white p-2 rounded-xl border border-slate-200 flex gap-2 overflow-x-auto scrollbar-hide shadow-sm flex-1">
+      {['all', 'today', '15days', 'month', 'specific_month', 'custom'].map(period => (
+        <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+          {period === 'all' && 'Todos'} {period === 'today' && 'Hoje'} {period === '15days' && '15 dias'} {period === 'month' && 'Este Mês'} {period === 'specific_month' && 'Mês Específico'} {period === 'custom' && 'Personalizado'}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderMonthSelectors = () => (
+    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+      <div className="flex flex-col gap-1.5 w-full">
+        <label className="text-sm font-medium text-slate-700">Mês</label>
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-white text-slate-800">
+          {MONTHS_OPTIONS.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+        </select>
+      </div>
+      <div className="flex flex-col gap-1.5 w-full">
+        <label className="text-sm font-medium text-slate-700">Ano</label>
+        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-white text-slate-800">
+          {YEARS_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+    </div>
+  );
 
   const renderDashboard = () => {
     const totals = filteredTransactions.reduce((acc, curr) => {
@@ -605,31 +553,19 @@ function DashboardApp({ userProfile }) {
     const recent = filteredTransactions.slice(0, 8); 
     
     const incomeTransactions = filteredTransactions.filter(t => t.type === 'income');
-    const incomePaymentData = incomeTransactions.reduce((acc, tx) => { 
-        acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); 
-        return acc; 
-    }, {});
+    const incomePaymentData = incomeTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
     const sortedIncomePayments = Object.entries(incomePaymentData).sort((a, b) => b[1] - a[1]);
 
     const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
-    const expensePaymentData = expenseTransactions.reduce((acc, tx) => { 
-        acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); 
-        return acc; 
-    }, {});
+    const expensePaymentData = expenseTransactions.reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
     const sortedExpensePayments = Object.entries(expensePaymentData).sort((a, b) => b[1] - a[1]);
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2></header>
 
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="bg-white p-2 rounded-xl border border-slate-200 flex gap-2 overflow-x-auto scrollbar-hide shadow-sm flex-1">
-            {['all', 'today', '15days', 'month', 'custom'].map(period => (
-              <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-                {period === 'all' && 'Todos'} {period === 'today' && 'Hoje'} {period === '15days' && '15 dias'} {period === 'month' && 'Este Mês'} {period === 'custom' && 'Personalizado'}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-col lg:flex-row gap-4 mb-6">
+          {renderFilterButtons()}
           <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[200px]">
             <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-2">
               <option value="all">Todas as Categorias</option>
@@ -638,8 +574,10 @@ function DashboardApp({ userProfile }) {
           </div>
         </div>
 
+        {filterPeriod === 'specific_month' && renderMonthSelectors()}
+
         {filterPeriod === 'custom' && (
-           <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+           <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
              <Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} />
              <Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} />
            </div>
@@ -719,12 +657,12 @@ function DashboardApp({ userProfile }) {
   };
 
   const renderBills = () => {
-    // Filtros de Agendamentos (Contas a pagar/receber)
-    const filteredBills = bills.filter(b => dateFilterLogic(b.dueDate, filterPeriod, customDateStart, customDateEnd)).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    const filteredBills = bills.filter(b => dateFilterLogic(b.dueDate, filterPeriod, customDateStart, customDateEnd, filterMonth, filterYear)).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
     
     const pendingBills = filteredBills.filter(b => b.status === 'pending');
     const toReceive = pendingBills.filter(b => b.type === 'income').reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
     const toPay = pendingBills.filter(b => b.type === 'expense').reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+    const predictedBalance = toReceive - toPay;
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -734,14 +672,10 @@ function DashboardApp({ userProfile }) {
         </header>
 
         <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="bg-white p-2 rounded-xl border border-slate-200 flex gap-2 overflow-x-auto scrollbar-hide shadow-sm flex-1">
-            {['all', 'today', '15days', 'month', 'custom'].map(period => (
-              <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-                {period === 'all' && 'Todos'} {period === 'today' && 'Hoje'} {period === '15days' && 'Próximos 15 dias'} {period === 'month' && 'Este Mês'} {period === 'custom' && 'Personalizado'}
-              </button>
-            ))}
-          </div>
+          {renderFilterButtons()}
         </div>
+
+        {filterPeriod === 'specific_month' && renderMonthSelectors()}
 
         {filterPeriod === 'custom' && (
            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
@@ -750,7 +684,11 @@ function DashboardApp({ userProfile }) {
            </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <Card className="p-6 border-none shadow-md text-white bg-[#000066]">
+            <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-2"><Wallet size={14}/> Saldo Previsto</p>
+            <h3 className={`text-3xl font-black ${predictedBalance < 0 ? 'text-red-400' : 'text-white'}`}>{predictedBalance < 0 ? `-R$ ${formatNumber(Math.abs(predictedBalance))}` : `R$ ${formatNumber(predictedBalance)}`}</h3>
+          </Card>
           <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
             <p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-2"><ArrowUpCircle size={14}/> Previsão de Recebimentos</p>
             <h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(toReceive)}</h3>
@@ -811,17 +749,12 @@ function DashboardApp({ userProfile }) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Lançamentos</h2><p className="text-slate-500 text-sm mt-1">Gerencie todas as entradas e saídas do seu caixa real.</p></div>
+          <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Lançamentos</h2><p className="text-slate-500 text-sm mt-1">Gerencie todas as suas entradas e saídas do caixa.</p></div>
           <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="flex-1 sm:flex-none bg-white" icon={Download}>Excel</Button><Button onClick={() => handleOpenModal()} icon={Plus} className="flex-1 sm:flex-none">Novo Lançamento</Button></div>
         </header>
+        
         <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="bg-white p-2 rounded-xl border border-slate-200 flex gap-2 overflow-x-auto scrollbar-hide shadow-sm flex-1">
-            {['all', 'today', '15days', 'month', 'custom'].map(period => (
-              <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
-                {period === 'all' && 'Todos'} {period === 'today' && 'Hoje'} {period === '15days' && 'Últimos 15 dias'} {period === 'month' && 'Este Mês'} {period === 'custom' && 'Personalizado'}
-              </button>
-            ))}
-          </div>
+          {renderFilterButtons()}
           <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[200px] flex items-center">
             <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none px-2 cursor-pointer">
               <option value="all">Todas as Categorias</option>
@@ -829,12 +762,16 @@ function DashboardApp({ userProfile }) {
             </select>
           </div>
         </div>
+
+        {filterPeriod === 'specific_month' && renderMonthSelectors()}
+
         {filterPeriod === 'custom' && (
            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
              <Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} />
              <Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} />
            </div>
         )}
+
         <div className="space-y-3">
             {filteredTransactions.map(tx => (
               <Card key={tx.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors group border-l-4 ${tx.type === 'income' ? 'border-l-emerald-500 hover:border-emerald-200' : 'border-l-red-500 hover:border-red-200'}`}>
@@ -926,8 +863,8 @@ function DashboardApp({ userProfile }) {
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Como Funciona</h2><p className="text-slate-500 mt-1">Um passo a passo simples para dominar o sistema.</p></header>
       <div className="space-y-4">
          <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Aceda ao separador "Categorias" e crie os nomes dos seus tipos de despesas e receitas.</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Crie Previsões (Contas a Pagar)</h3><p className="text-slate-600">Vá em "Contas Pagar/Receber" e registre contas futuras (Ex: Aluguel por 6 meses).</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Dê Baixa para Somar no Caixa</h3><p className="text-slate-600">Quando receber ou pagar uma previsão, clique em "Receber/Pagar". O dinheiro entrará na hora no saldo e nos Lançamentos Diários!</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Registe as Movimentações</h3><p className="text-slate-600">Vá a "Lançamentos" ou "Contas Pagar/Receber" e comece a registar as suas finanças.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo para ver relatórios de "Mês Específico" e Excel.</p></div></Card>
       </div>
     </div>
   );
@@ -1045,7 +982,7 @@ function DashboardApp({ userProfile }) {
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
           <NavItem id="dashboard" icon={Home} label="Início" />
           <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
-          <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" /> {/* NOVO MENU */}
+          <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
           <NavItem id="categories" icon={Tag} label="Categorias" />
           <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
           <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
@@ -1058,7 +995,6 @@ function DashboardApp({ userProfile }) {
         </div>
       </aside>
       {isMobileMenuOpen && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />)}
-      
       <main className="flex-1 w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-10 pb-24 overflow-x-hidden">
         {userProfile.status === 'Bloqueado' ? (
           <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-white rounded-3xl border border-red-100 shadow-sm mt-10">
@@ -1086,9 +1022,7 @@ function DashboardApp({ userProfile }) {
         )}
       </main>
 
-      {}
-      
-      {/* Modal de Lançamento Diário */}
+      {/* Modal de Transação */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
@@ -1109,6 +1043,59 @@ function DashboardApp({ userProfile }) {
                   <div className="mt-8 flex gap-3"><button type="button" onClick={handleCloseModal} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white transition-colors shadow-sm ${formData.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{editingId ? 'Salvar' : 'Confirmar'}</button></div>
                 </form>
              </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Agendamento (NOVO) */}
+      {billModal.isOpen && (
+        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setBillModal({ isOpen: false, id: null })}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><PendingIcon className="text-blue-500"/>{billModal.id ? 'Editar Previsão' : 'Nova Previsão'}</h3><button onClick={() => setBillModal({ isOpen: false, id: null })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
+             <div className="p-6">
+                <form onSubmit={handleSaveBill}>
+                  <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleBillTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>A Receber (+)</button><button type="button" onClick={() => handleBillTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>A Pagar (-)</button></div>
+                  <Input label="Descrição da Conta" name="title" value={billFormData.title} onChange={e => setBillFormData(prev => ({...prev, title: e.target.value}))} placeholder="Ex: Aluguel da Loja" required />
+                  <Select label="Categoria de Destino" name="category" value={billFormData.category} onChange={e => setBillFormData(prev => ({...prev, category: e.target.value}))} required options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
+                  <Input label="Valor (R$)" name="amount" type="text" inputMode="decimal" value={billFormData.amount} onChange={e => setBillFormData(prev => ({...prev, amount: e.target.value}))} placeholder="0,00" required />
+                  <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={e => setBillFormData(prev => ({...prev, dueDate: e.target.value}))} required />
+                  
+                  {!billModal.id && (
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
+                      <Input label="Repetir por quantos meses?" name="recurrenceMonths" type="number" min="1" max="60" value={billFormData.recurrenceMonths} onChange={e => setBillFormData(prev => ({...prev, recurrenceMonths: e.target.value}))} placeholder="1" required />
+                      <p className="text-xs text-blue-600 font-medium mt-[-10px]">O sistema criará faturas individuais para cada mês.</p>
+                    </div>
+                  )}
+
+                  <div className="mt-8 flex gap-3"><button type="button" onClick={() => setBillModal({ isOpen: false, id: null })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white transition-colors shadow-sm ${billFormData.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{billModal.id ? 'Atualizar' : 'Agendar'}</button></div>
+                </form>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para DAR BAIXA (NOVO) */}
+      {payBillModal.isOpen && (
+        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setPayBillModal({ isOpen: false, bill: null })}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300">
+             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CheckCircle className="text-emerald-500" size={24}/>Dar Baixa na Conta</h3><button onClick={() => setPayBillModal({ isOpen: false, bill: null })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
+             <form onSubmit={handleSettleBill} className="p-6">
+                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                   <p className="text-sm font-bold text-slate-700 mb-1">Conta: <span className="font-medium text-slate-600">{payBillModal.bill?.title}</span></p>
+                   <p className="text-sm font-bold text-slate-700 mb-1">Vencimento: <span className="font-medium text-slate-600">{formatDate(payBillModal.bill?.dueDate)}</span></p>
+                   <p className="text-sm font-bold text-slate-700">Valor Original: <span className={`font-medium ${payBillModal.bill?.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>R$ {formatNumber(payBillModal.bill?.amount)}</span></p>
+                </div>
+                
+                <p className="text-sm text-slate-500 mb-4">* Se houver juros, multa ou desconto, altere o valor abaixo antes de salvar.</p>
+                
+                <Input label="Valor Final (R$)" name="finalAmount" type="text" inputMode="decimal" value={payFormData.finalAmount} onChange={e => setPayFormData(prev => ({...prev, finalAmount: e.target.value}))} required />
+                <Select label="Forma de Pagamento" name="paymentMethod" value={payFormData.paymentMethod} onChange={e => setPayFormData(prev => ({...prev, paymentMethod: e.target.value}))} options={PAYMENT_METHODS} required />
+                <Input label="Data do Pagamento" name="paymentDate" type="date" value={payFormData.paymentDate} onChange={e => setPayFormData(prev => ({...prev, paymentDate: e.target.value}))} required />
+
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setPayBillModal({ isOpen: false, bill: null })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Confirmar Pagamento</button></div>
+             </form>
           </div>
         </div>
       )}
@@ -1147,59 +1134,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* NOVO: Modal de Criar Previsão (Agendamento de Contas) */}
-      {billModal.isOpen && (
-        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setBillModal({ isOpen: false, id: null })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><PendingIcon className="text-blue-500"/>{billModal.id ? 'Editar Previsão' : 'Nova Previsão'}</h3><button onClick={() => setBillModal({ isOpen: false, id: null })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <div className="p-6">
-                <form onSubmit={handleSaveBill}>
-                  <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleBillTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>A Receber (+)</button><button type="button" onClick={() => handleBillTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>A Pagar (-)</button></div>
-                  <Input label="Descrição da Conta" name="title" value={billFormData.title} onChange={e => setBillFormData(prev => ({...prev, title: e.target.value}))} placeholder="Ex: Aluguel da Loja" required />
-                  <Select label="Categoria de Destino" name="category" value={billFormData.category} onChange={e => setBillFormData(prev => ({...prev, category: e.target.value}))} required options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
-                  <Input label="Valor (R$)" name="amount" type="text" inputMode="decimal" value={billFormData.amount} onChange={e => setBillFormData(prev => ({...prev, amount: e.target.value}))} placeholder="0,00" required />
-                  <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={e => setBillFormData(prev => ({...prev, dueDate: e.target.value}))} required />
-                  
-                  {!billModal.id && (
-                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
-                      <Input label="Repetir por quantos meses?" name="recurrenceMonths" type="number" min="1" max="60" value={billFormData.recurrenceMonths} onChange={e => setBillFormData(prev => ({...prev, recurrenceMonths: e.target.value}))} placeholder="1" required />
-                      <p className="text-xs text-blue-600 font-medium mt-[-10px]">O sistema criará faturas individuais para cada mês.</p>
-                    </div>
-                  )}
-
-                  <div className="mt-8 flex gap-3"><button type="button" onClick={() => setBillModal({ isOpen: false, id: null })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white transition-colors shadow-sm ${billFormData.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{billModal.id ? 'Atualizar' : 'Agendar'}</button></div>
-                </form>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* NOVO: Modal para DAR BAIXA (Pagar/Receber) */}
-      {payBillModal.isOpen && (
-        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setPayBillModal({ isOpen: false, bill: null })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CheckCircle className="text-emerald-500" size={24}/>Dar Baixa na Conta</h3><button onClick={() => setPayBillModal({ isOpen: false, bill: null })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSettleBill} className="p-6">
-                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                   <p className="text-sm font-bold text-slate-700 mb-1">Conta: <span className="font-medium text-slate-600">{payBillModal.bill?.title}</span></p>
-                   <p className="text-sm font-bold text-slate-700 mb-1">Vencimento: <span className="font-medium text-slate-600">{formatDate(payBillModal.bill?.dueDate)}</span></p>
-                   <p className="text-sm font-bold text-slate-700">Valor Original: <span className={`font-medium ${payBillModal.bill?.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>R$ {formatNumber(payBillModal.bill?.amount)}</span></p>
-                </div>
-                
-                <p className="text-sm text-slate-500 mb-4">* Se houver juros, multa ou desconto, altere o valor abaixo antes de salvar.</p>
-                
-                <Input label="Valor Final (R$)" name="finalAmount" type="text" inputMode="decimal" value={payFormData.finalAmount} onChange={e => setPayFormData(prev => ({...prev, finalAmount: e.target.value}))} required />
-                <Select label="Forma de Pagamento" name="paymentMethod" value={payFormData.paymentMethod} onChange={e => setPayFormData(prev => ({...prev, paymentMethod: e.target.value}))} options={PAYMENT_METHODS} required />
-                <Input label="Data do Pagamento" name="paymentDate" type="date" value={payFormData.paymentDate} onChange={e => setPayFormData(prev => ({...prev, paymentDate: e.target.value}))} required />
-
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setPayBillModal({ isOpen: false, bill: null })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Confirmar Pagamento</button></div>
-             </form>
-          </div>
-        </div>
-      )}
-
       {/* Modal de Confirmação Genérica */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -1228,13 +1162,11 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
       if (user) {
-        // Busca o perfil do utilizador ligado no Firestore
         const docRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
         const unsubProfile = onSnapshot(docRef, (docSnap) => {
            if(docSnap.exists()) {
               setUserProfile({ uid: user.uid, ...docSnap.data() });
            } else {
-              // Se por algum motivo não encontrar perfil, cria um básico
               const basicProfile = { name: 'Utilizador', email: user.email, plan: 'Free', daysRemaining: 30, status: 'Ativo' };
               setDoc(docRef, basicProfile);
               setUserProfile({ uid: user.uid, ...basicProfile });
