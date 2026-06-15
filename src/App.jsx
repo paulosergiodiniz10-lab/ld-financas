@@ -725,16 +725,17 @@ function DashboardApp({ userProfile }) {
 
             <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-2 mt-8 pt-6 border-t border-slate-200">Histórico de Contas Baixadas (Pagas/Recebidas)</h3>
             {filteredBills.filter(b => b.status === 'paid').map(bill => (
-               <div key={bill.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 rounded-2xl border border-slate-100">
-                 <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden opacity-70">
+               <div key={bill.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 rounded-2xl border border-slate-100 group">
+                 <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden opacity-70 group-hover:opacity-100 transition-opacity">
                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600"><CheckCircle size={20}/></div>
                    <div className="min-w-0 flex-1">
                      <p className="font-bold text-slate-800 text-base truncate line-through">{bill.title}</p>
                      <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> Pago em: {formatDate(bill.paymentDate)}</p>
                    </div>
                  </div>
-                 <div className="flex items-center gap-4 opacity-70">
+                 <div className="flex items-center gap-4 opacity-70 group-hover:opacity-100 transition-opacity">
                     <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.paidAmount)}` : `-R$ ${formatNumber(bill.paidAmount)}`}</div>
+                    <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Excluir Histórico"><Trash2 size={18}/></button>
                  </div>
                </div>
             ))}
