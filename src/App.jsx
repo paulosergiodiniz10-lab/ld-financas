@@ -272,12 +272,12 @@ function DashboardApp({ userProfile }) {
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
 
-  // Modal para Contas a Pagar (Agendamentos)
+  // Modal para Contas a Pagar (Agendamentos) - REMOVIDO TITLE E ADD CATEGORY LOGIC
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
-  const [billFormData, setBillFormData] = useState({ title: '', amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
+  const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
   
-  // Modal para dar Baixa (Pagar/Receber) na Conta
-  const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '' });
+  // Modal para dar Baixa na Conta - ADD PAYMENT METHOD
+  const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
@@ -362,12 +362,15 @@ function DashboardApp({ userProfile }) {
     handleCloseModal();
   };
 
-  const requestDeleteTransaction = (tx) => {
-    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? O seu saldo será atualizado.', async () => {
-        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', tx.id));
-        // Se esse lançamento veio de uma "Baixa" de conta a pagar, reverte a conta para Pendente!
-        if (tx.originBillId) {
-            const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', tx.originBillId);
+  const requestDeleteTransaction = (id) => {
+    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? Isso afetará o seu saldo.', async () => {
+        // Encontra o Lançamento para ver se ele veio de uma Conta
+        const txToDelete = transactions.find(t => t.id === id);
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
+        
+        // REVERTE CONTA SE EXISTIR CORDÃO UMBILICAL
+        if (txToDelete && txToDelete.originBillId) {
+            const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId);
             await setDoc(billRef, { status: 'pending', paymentDate: null, paidAmount: null }, { merge: true });
         }
         closeConfirm();
@@ -376,7 +379,7 @@ function DashboardApp({ userProfile }) {
 
   // ===================== CONTAS A PAGAR E RECEBER =====================
   const handleOpenBillModal = () => {
-    setBillFormData({ title: '', amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: sortedExpenseCats[0] || '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
+    setBillFormData({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: sortedExpenseCats[0] || '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
     setIsBillModalOpen(true);
   };
   const handleBillFormChange = (e) => setBillFormData(prev => ({ ...prev, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -393,16 +396,16 @@ function DashboardApp({ userProfile }) {
     const baseDate = new Date(billFormData.dueDate + 'T12:00:00');
     const monthsToCreate = billFormData.isRecurring ? parseInt(billFormData.recurrenceMonths) : 1;
 
-    // Cria as parcelas
+    // Cria as parcelas usando apenas Categoria
     for (let i = 0; i < monthsToCreate; i++) {
         const currentDate = new Date(baseDate);
         currentDate.setMonth(currentDate.getMonth() + i);
         const formattedDate = currentDate.toISOString().split('T')[0];
         
         const newBill = {
-           title: billFormData.title + (monthsToCreate > 1 ? ` (${i+1}/${monthsToCreate})` : ''),
            amount: finalAmount, type: billFormData.type, dueDate: formattedDate,
-           category: finalCategory, status: 'pending',
+           category: finalCategory + (monthsToCreate > 1 ? ` (${i+1}/${monthsToCreate})` : ''), 
+           status: 'pending',
            createdAt: new Date().toISOString()
         };
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', Date.now().toString() + i), newBill);
@@ -418,7 +421,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const openSettleModal = (bill) => {
-     setSettleModal({ isOpen: true, bill: bill, paymentDate: new Date().toISOString().split('T')[0], paidAmount: bill.amount });
+     setSettleModal({ isOpen: true, bill: bill, paymentDate: new Date().toISOString().split('T')[0], paidAmount: bill.amount, paymentMethod: PAYMENT_METHODS[0] });
   };
 
   const handleSettleBillSubmit = async (e) => {
@@ -432,16 +435,16 @@ function DashboardApp({ userProfile }) {
      const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', bill.id);
      await setDoc(billRef, { status: 'paid', paymentDate: settleModal.paymentDate, paidAmount: finalPaidAmount, updatedAt: new Date().toISOString() }, { merge: true });
 
-     // 2. CRIA O LANÇAMENTO DIÁRIO PARA AFETAR O SALDO E O DASHBOARD!
+     // 2. CRIA O LANÇAMENTO DIÁRIO COM A FORMA DE PAGAMENTO ESCOLHIDA NA BAIXA
      const txRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', Date.now().toString());
      await setDoc(txRef, {
         amount: finalPaidAmount, type: bill.type, date: settleModal.paymentDate,
-        category: bill.category, paymentMethod: 'Outros', // Padrão genérico, pode ser editado
-        originBillId: bill.id, // Cordão umbilical
+        category: bill.category, paymentMethod: settleModal.paymentMethod, // AGORA USA O QUE O CLIENTE ESCOLHEU
+        originBillId: bill.id, 
         updatedAt: new Date().toISOString()
      });
 
-     setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '' });
+     setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
   };
 
   // ===================== CATEGORIAS =====================
@@ -723,7 +726,7 @@ function DashboardApp({ userProfile }) {
                 <div className={`font-bold text-lg ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? `+R$ ${formatNumber(tx.amount)}` : `-R$ ${formatNumber(tx.amount)}`}</div>
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => handleOpenModal(tx)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"><Edit2 size={18}/></button>
-                  <button onClick={() => requestDeleteTransaction(tx)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                  <button onClick={() => requestDeleteTransaction(tx.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
                 </div>
               </div>
             </Card>
@@ -767,8 +770,8 @@ function DashboardApp({ userProfile }) {
                  <Card key={bill.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 ${bill.type === 'income' ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
                    <div className="flex items-center gap-4 w-full sm:w-auto">
                      <div className="min-w-0 flex-1">
-                       <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{bill.title} {isOverdue && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase">Atrasado</span>}</p>
-                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1"><Calendar size={14}/> Vence em: {formatDate(bill.dueDate)} &bull; {bill.category}</p>
+                       <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{bill.category} {isOverdue && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase">Atrasado</span>}</p>
+                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1"><Calendar size={14}/> Vence em: {formatDate(bill.dueDate)}</p>
                      </div>
                    </div>
                    <div className="flex items-center justify-between sm:justify-end gap-4">
@@ -786,10 +789,10 @@ function DashboardApp({ userProfile }) {
             <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-2 mt-8 pt-6 border-t border-slate-200">Histórico de Contas Baixadas (Pagas/Recebidas)</h3>
             {filteredBills.filter(b => b.status === 'paid').map(bill => (
                <div key={bill.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 rounded-2xl border border-slate-100 group">
-                 <div className="flex items-center gap-4 w-full sm:w-auto opacity-70 group-hover:opacity-100 transition-opacity">
+                 <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden opacity-70 group-hover:opacity-100 transition-opacity">
                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600"><CheckCircle size={20}/></div>
                    <div className="min-w-0 flex-1">
-                     <p className="font-bold text-slate-800 text-base truncate line-through">{bill.title}</p>
+                     <p className="font-bold text-slate-800 text-base truncate line-through">{bill.category}</p>
                      <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> Pago em: {formatDate(bill.paymentDate)}</p>
                    </div>
                  </div>
@@ -859,7 +862,7 @@ function DashboardApp({ userProfile }) {
           <div className="w-full md:w-auto"><p className="text-slate-600 mb-4 font-medium md:max-w-[300px]">Precisa de ajuda para usar o sistema, relatar um problema ou reativar o seu plano? Clique no botão para chamar a nossa equipa técnica.</p><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
         </div>
       </Card>
-      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Aceda ao separador <b>"Meu Plano"</b> e clique em <b>"Renovar Assinatura"</b>. Será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode aceder de qualquer telemóvel ou computador.</p></Card></div></div>
+      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> e clique em <b>"Assinar via WhatsApp"</b>. Você será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode acessar de qualquer celular ou computador.</p></Card></div></div>
     </div>
   );
 
@@ -868,9 +871,9 @@ function DashboardApp({ userProfile }) {
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Como Funciona</h2><p className="text-slate-500 mt-1">Um passo a passo simples para dominar o sistema.</p></header>
       <div className="space-y-4">
          <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Acesse a aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Aluguel) e receitas (Serviço, Venda).</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Dia a Dia)</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Registre os valores reais que já entraram ou saíram do seu caixa.</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Previsões)</h3><p className="text-slate-600">Agende os seus boletos e recebimentos futuros. Quando você der "Baixa" em uma conta, o valor entra automaticamente no caixa principal!</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo das telas para ver o resultado do Mês. Em Lançamentos, clique em "Excel" para baixar os relatórios.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Registre os valores que <b>já entraram ou saíram</b> de fato do seu bolso ou banco hoje.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende seus boletos e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo do Painel Principal para ver o Mês. Em Lançamentos, clique em "Excel" para baixar e enviar para o contador.</p></div></Card>
       </div>
     </div>
   );
@@ -878,6 +881,7 @@ function DashboardApp({ userProfile }) {
   const renderPlans = () => {
     const isAdmin = userProfile.email === ADMIN_EMAIL;
 
+    // SE FOR O ADMINISTRADOR, MOSTRA O PAINEL VIP DOURADO VITALÍCIO
     if (isAdmin) {
       return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -915,38 +919,32 @@ function DashboardApp({ userProfile }) {
               <h4 className="font-bold text-slate-800 text-lg">Atualizar Assinatura</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* Plano Básico */}
+                {/* --- CAIXINHA DO PLANO BÁSICO --- */}
                 <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
                   
-                  {/* EDITAR NOME DO PLANO BÁSICO */}
+                  {/* EDITAR AQUI O NOME E DESCRIÇÃO DO BÁSICO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
-                  
-                  {/* EDITAR DESCRIÇÃO DO PLANO BÁSICO */}
                   <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
                   
-                  {/* EDITAR VALOR DO PLANO BÁSICO */}
+                  {/* EDITAR AQUI O VALOR DO BÁSICO */}
                   <p className="text-2xl font-black text-slate-800 mb-6">R$ 9,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
                   
-                  {/* EDITAR MENSAGEM DO WHATSAPP DO PLANO BÁSICO */}
                   <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
                 </div>
 
-                {/* Plano Pro */}
+                {/* --- CAIXINHA DO PLANO PRO --- */}
                 <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
                   <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
                   
-                  {/* EDITAR NOME DO PLANO PRO */}
+                  {/* EDITAR AQUI O NOME E DESCRIÇÃO DO PRO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
-                  
-                  {/* EDITAR DESCRIÇÃO DO PLANO PRO (O <b> deixa o texto em negrito) */}
                   <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
                   
-                  {/* EDITAR VALOR DO PLANO PRO */}
+                  {/* EDITAR AQUI O VALOR DO PRO */}
                   <p className="text-2xl font-black text-emerald-600 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
                   
-                  {/* EDITAR MENSAGEM DO WHATSAPP DO PLANO PRO */}
                   <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
                 </div>
 
@@ -1096,9 +1094,14 @@ function DashboardApp({ userProfile }) {
              <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Receipt className="text-slate-400"/> Novo Agendamento</h3><button onClick={() => setIsBillModalOpen(false)} className="p-2 text-slate-400 bg-slate-100 rounded-full"><X size={20}/></button></div>
              <form onSubmit={handleSaveBill} className="p-6">
                 <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => setBillFormData({...billFormData, type: 'income', category: sortedIncomeCats[0]})} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>A Receber (+)</button><button type="button" onClick={() => setBillFormData({...billFormData, type: 'expense', category: sortedExpenseCats[0]})} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>A Pagar (-)</button></div>
-                <Input label="Título da Conta" name="title" value={billFormData.title} onChange={handleBillFormChange} placeholder="Ex: Aluguel da Loja" required />
+                
                 <Select label="Categoria" name="category" value={billFormData.category} onChange={handleBillFormChange} required options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
-                {billFormData.category.toLowerCase().includes('outros') && <Input label="Descrição da Categoria" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} required />}
+                {billFormData.category.toLowerCase().includes('outros') && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <Input label="O que foi? (Breve descrição)" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} placeholder="Ex: Conta de Luz..." required />
+                    </div>
+                )}
+                
                 <Input label="Valor Previsto (R$)" name="amount" type="text" inputMode="decimal" value={billFormData.amount} onChange={handleBillFormChange} placeholder="0,00" required />
                 <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={handleBillFormChange} required />
                 
@@ -1128,11 +1131,14 @@ function DashboardApp({ userProfile }) {
              <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CheckCircle className={settleModal.bill?.type === 'income' ? 'text-emerald-500' : 'text-red-500'} size={24}/>{settleModal.bill?.type === 'income' ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}</h3><button onClick={() => setSettleModal({...settleModal, isOpen: false})} className="p-2 text-slate-400 bg-slate-100 rounded-full"><X size={20}/></button></div>
              <form onSubmit={handleSettleBillSubmit} className="p-6">
                 <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                   <p className="text-sm font-bold text-slate-700 mb-1">Conta: <span className="font-medium text-slate-600">{settleModal.bill?.title}</span></p>
+                   <p className="text-sm font-bold text-slate-700 mb-1">Conta: <span className="font-medium text-slate-600">{settleModal.bill?.category}</span></p>
                    <p className="text-sm font-bold text-slate-700">Valor Original: <span className="font-medium text-slate-600">R$ {formatNumber(settleModal.bill?.amount)}</span></p>
                 </div>
+                
+                <Select label="Forma de Pagamento Utilizada" name="paymentMethod" value={settleModal.paymentMethod} onChange={(e) => setSettleModal({...settleModal, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
                 <Input label="Qual foi o valor final (com multas/descontos)?" name="paidAmount" type="text" inputMode="decimal" value={settleModal.paidAmount} onChange={(e) => setSettleModal({...settleModal, paidAmount: e.target.value})} placeholder="0,00" required />
                 <Input label="Data efetiva" name="paymentDate" type="date" value={settleModal.paymentDate} onChange={(e) => setSettleModal({...settleModal, paymentDate: e.target.value})} required />
+                
                 <div className="mt-6 flex gap-3"><button type="button" onClick={() => setSettleModal({...settleModal, isOpen: false})} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${settleModal.bill?.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>Dar Baixa no Caixa</button></div>
              </form>
           </div>
@@ -1169,7 +1175,7 @@ function DashboardApp({ userProfile }) {
                    <button type="button" onClick={() => {
                       const currentDays = parseInt(adminEditModal.daysRemaining) || 0;
                       // Se o cara atrasou (chegou a 0), reseta pra 30. Se adiantou o pagamento, soma os 30 aos dias que ele já tinha.
-                      const newDays = currentDays === 0 ? 30 : currentDays + 30;
+                      const newDays = currentDays <= 0 ? 30 : currentDays + 30;
                       setAdminEditModal({...adminEditModal, daysRemaining: newDays});
                    }} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
                      +30 Dias
