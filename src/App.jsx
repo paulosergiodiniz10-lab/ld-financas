@@ -917,9 +917,17 @@ function DashboardApp({ userProfile }) {
                 {/* Plano Básico */}
                 <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
+                  
+                  {/* EDITAR NOME DO PLANO BÁSICO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
+                  
+                  {/* EDITAR DESCRIÇÃO DO PLANO BÁSICO */}
                   <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
-                  <p className="text-2xl font-black text-slate-800 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
+                  
+                  {/* EDITAR VALOR DO PLANO BÁSICO */}
+                  <p className="text-2xl font-black text-slate-800 mb-6">R$ 9,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
+                  
+                  {/* EDITAR MENSAGEM DO WHATSAPP DO PLANO BÁSICO */}
                   <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
                 </div>
 
@@ -927,9 +935,17 @@ function DashboardApp({ userProfile }) {
                 <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
                   <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
+                  
+                  {/* EDITAR NOME DO PLANO PRO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
+                  
+                  {/* EDITAR DESCRIÇÃO DO PLANO PRO (O <b> deixa o texto em negrito) */}
                   <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
-                  <p className="text-2xl font-black text-emerald-600 mb-6">R$ 29,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
+                  
+                  {/* EDITAR VALOR DO PLANO PRO */}
+                  <p className="text-2xl font-black text-emerald-600 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
+                  
+                  {/* EDITAR MENSAGEM DO WHATSAPP DO PLANO PRO */}
                   <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
                 </div>
 
@@ -1003,10 +1019,12 @@ function DashboardApp({ userProfile }) {
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
           <NavItem id="dashboard" icon={Home} label="Início" />
           <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
-          {/* Bloqueio da aba Contas Pagar/Receber para quem é Free/Básico */}
-          {(userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
+          
+          {/* Liberação da aba para Free (Test-drive), Pro e Admin. Básico fica sem acesso. */}
+          {(userProfile.plan === 'Free' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
              <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
           )}
+          
           <NavItem id="categories" icon={Tag} label="Categorias" />
           <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
           <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
