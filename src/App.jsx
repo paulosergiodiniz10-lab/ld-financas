@@ -412,40 +412,21 @@ function DashboardApp({ userProfile }) {
 
   const handleSaveAdminEdit = async (e) => {
     e.preventDefault();
-    let parsedDays = parseInt(adminEditModal.daysRemaining); if (isNaN(parsedDays)) parsedDays = 0;
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid), { plan: adminEditModal.plan, daysRemaining: parsedDays }, { merge: true });
-    setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
-  };
+    let parsedDays = parseInt(adminEditModal.daysRemaining);
+    if (isNaN(parsedDays)) parsedDays = 0;
 
-  // ===================== FILTROS =====================
-  const filterDataByPeriod = (data, dateField) => {
-    const today = new Date(); today.setHours(0,0,0,0);
-    return data.filter(item => {
-      const itemTime = new Date(item[dateField] + 'T00:00:00').getTime();
-      if (filterPeriod === 'today') return item[dateField] === today.toISOString().split('T')[0];
-      if (filterPeriod === '15days') {
-         const past = new Date(today); past.setDate(today.getDate() - 15);
-         return itemTime >= past.getTime() && itemTime <= today.getTime();
-      }
-      if (filterPeriod === 'month') {
-         const start = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
-         const end = new Date(today.getFullYear(), today.getMonth() + 1, 0).getTime();
-         return itemTime >= start && itemTime <= end;
-      }
-      if (filterPeriod === 'specific_month') {
-         const year = parseInt(selectedYear); const month = parseInt(selectedMonth) - 1;
-         const start = new Date(year, month, 1).getTime();
-         const end = new Date(year, month + 1, 0).getTime();
-         return itemTime >= start && itemTime <= end;
-      }
-      if (filterPeriod === 'custom') {
-         if (!customDateStart || !customDateEnd) return true; 
-         const start = new Date(customDateStart + 'T00:00:00').getTime();
-         const end = new Date(customDateEnd + 'T23:59:59').getTime();
-         return itemTime >= start && itemTime <= end;
-      }
-      return true; // 'all'
-    });
+    const userRef = doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid);
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Além de atualizar os dias, reseta o marcador para começar a descontar de hoje
+    await setDoc(userRef, { 
+      plan: adminEditModal.plan, 
+      daysRemaining: parsedDays,
+      status: parsedDays > 0 ? 'Ativo' : 'Bloqueado', // Desbloqueia a conta se você adicionou dias!
+      lastDecrementDate: today
+    }, { merge: true });
+    
+    setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
   };
 
   const filteredTransactions = useMemo(() => {
