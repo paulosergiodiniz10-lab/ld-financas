@@ -262,6 +262,9 @@ function DashboardApp({ userProfile }) {
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
+  // Modal de Edição do Admin
+  const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
+
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
@@ -423,15 +426,24 @@ function DashboardApp({ userProfile }) {
     });
   };
 
-  const setEditingAdminUser = (user) => {
-    const newPlan = prompt(`Editar Plano de ${user.name}\nDigite o novo plano (Ex: Pro, Free):`, user.plan);
-    if (newPlan !== null) {
-      const newDays = prompt(`Editar Dias Restantes de ${user.name}\nDigite a quantidade de dias (Ex: 30, 365):`, user.daysRemaining);
-      if (newDays !== null && !isNaN(parseInt(newDays))) {
-        const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-        setDoc(userRef, { plan: newPlan, daysRemaining: parseInt(newDays) }, { merge: true });
-      }
-    }
+  const handleOpenAdminEdit = (user) => {
+    setAdminEditModal({
+      isOpen: true,
+      user: user,
+      plan: user.plan || 'Free',
+      daysRemaining: user.daysRemaining || 0
+    });
+  };
+
+  const handleSaveAdminEdit = async (e) => {
+    e.preventDefault();
+    let parsedDays = parseInt(adminEditModal.daysRemaining);
+    if (isNaN(parsedDays)) parsedDays = 0;
+
+    const userRef = doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid);
+    await setDoc(userRef, { plan: adminEditModal.plan, daysRemaining: parsedDays }, { merge: true });
+    
+    setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
   };
 
   const filteredTransactions = useMemo(() => {
@@ -804,7 +816,7 @@ function DashboardApp({ userProfile }) {
                     <button onClick={() => handleToggleUserStatus(user)} disabled={isThisUserAdmin} className={`p-2 rounded-lg transition-colors border disabled:opacity-30 disabled:cursor-not-allowed ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
                       {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
                     </button>
-                    <button onClick={() => setEditingAdminUser(user)} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Editar Plano">
+                    <button onClick={() => handleOpenAdminEdit(user)} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Editar Plano">
                       <Edit2 size={16}/>
                     </button>
                     <button onClick={() => handleDeleteAdminUser(user)} disabled={isThisUserAdmin} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Excluir">
@@ -865,6 +877,7 @@ function DashboardApp({ userProfile }) {
         )}
       </main>
 
+      {/* Modal de Transação */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
@@ -889,6 +902,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
+      {/* Modal de Editar/Criar Categoria */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })}></div>
@@ -902,6 +916,27 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
+      {/* NOVO: Modal de Edição do Admin (Planos e Dias) */}
+      {adminEditModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
+             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Settings className="text-slate-400" size={24}/>Editar Plano do Cliente</h3><button onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
+             <form onSubmit={handleSaveAdminEdit} className="p-6">
+                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                   <p className="text-sm font-bold text-slate-700 mb-1">Cliente: <span className="font-medium text-slate-600">{adminEditModal.user?.name}</span></p>
+                   <p className="text-sm font-bold text-slate-700">E-mail: <span className="font-medium text-slate-600">{adminEditModal.user?.email}</span></p>
+                </div>
+                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={['Free', 'Pro', 'Admin']} required />
+                <Input label="Dias Restantes" name="daysRemaining" type="number" inputMode="numeric" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
+                <p className="text-xs text-slate-500 mt-[-10px] mb-4">* Digite um número muito alto (ex: 999) para tornar o acesso vitalício.</p>
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
+             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação Genérica */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
