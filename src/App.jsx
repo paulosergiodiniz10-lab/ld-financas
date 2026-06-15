@@ -272,11 +272,11 @@ function DashboardApp({ userProfile }) {
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
 
-  // Modal para Contas a Pagar (Agendamentos) - REMOVIDO TITLE E ADD CATEGORY LOGIC
+  // Modal para Contas a Pagar (Agendamentos)
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
   
-  // Modal para dar Baixa na Conta - ADD PAYMENT METHOD
+  // Modal para dar Baixa na Conta
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
@@ -414,7 +414,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const requestDeleteBill = (id) => {
-    openConfirm('Excluir Agendamento', 'Apagar esta conta do seu histórico/agenda?', async () => {
+    openConfirm('Excluir Histórico', 'Apagar esta conta do seu histórico/agenda?', async () => {
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', id));
         closeConfirm();
     });
@@ -630,73 +630,75 @@ function DashboardApp({ userProfile }) {
     }, {});
     const sortedExpensePayments = Object.entries(expensePaymentData).sort((a, b) => b[1] - a[1]);
 
+    const recentTx = [...filteredTransactions].slice(0, 5);
+
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2></header>
-        {renderFilterBar()}
-        {renderFilterExtras()}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-6 rounded-2xl shadow-md text-white bg-[#000066]">
-            <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p>
-            <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
-          </div>
-          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Entradas</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
-          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Saídas</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+           <header><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2><p className="text-slate-500 mt-1">Resumo das suas finanças diárias.</p></header>
+           <Button onClick={() => handleOpenModal()} icon={Plus} className="w-full sm:w-auto shadow-md hover:shadow-lg">Novo Lançamento</Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-           <div className="space-y-6">
-             <Card className="p-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-emerald-500" size={20}/> Formas de Pagamento (Entradas)</h3>
-                {sortedIncomePayments.length > 0 ? (
-                  <div className="space-y-5">
-                    {sortedIncomePayments.map(([method, val]) => {
-                      const percent = totals.income > 0 ? ((val / totals.income) * 100).toFixed(1) : 0;
-                      return (
-                        <div key={method}>
-                          <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-slate-800 text-emerald-600">+R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
-                          <div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-emerald-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
+        {renderFilterBar()}
+        {renderFilterExtras()}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="p-6 bg-[#000066] text-white border-none shadow-xl transform hover:-translate-y-1 transition-transform duration-300">
+            <div className="flex justify-between items-start mb-4"><div className="p-2 bg-white/10 rounded-xl backdrop-blur-sm"><Wallet size={24} className="text-blue-200" /></div><span className="text-blue-100 text-sm font-medium">Saldo Atual</span></div>
+            <h3 className="text-3xl font-black tracking-tight">{formatCurrency(balance)}</h3>
+          </Card>
+          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-4"><div className="p-2 bg-emerald-100 rounded-xl"><ArrowUpCircle size={24} className="text-emerald-600" /></div><span className="text-slate-500 text-sm font-medium">Receitas</span></div>
+            <h3 className="text-3xl font-black text-slate-800 tracking-tight">{formatCurrency(totals.income)}</h3>
+          </Card>
+          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-4"><div className="p-2 bg-red-100 rounded-xl"><ArrowDownCircle size={24} className="text-red-600" /></div><span className="text-slate-500 text-sm font-medium">Despesas</span></div>
+            <h3 className="text-3xl font-black text-slate-800 tracking-tight">{formatCurrency(totals.expense)}</h3>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <Card className="p-6">
+               <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><CreditCard size={20} className="text-slate-400"/> Formas de Pagamento</h3>
+               <div className="space-y-6">
+                  <div>
+                     <p className="text-sm font-bold text-emerald-600 mb-3 border-b border-slate-100 pb-2">Entradas (Receitas)</p>
+                     {sortedIncomePayments.length > 0 ? (
+                        <div className="space-y-3">
+                           {sortedIncomePayments.map(([method, total]) => (
+                              <div key={method} className="flex justify-between items-center"><span className="text-slate-600 text-sm font-medium">{method}</span><span className="font-bold text-slate-800">{formatCurrency(total)}</span></div>
+                           ))}
                         </div>
-                      )
-                    })}
+                     ) : <p className="text-sm text-slate-400 italic">Sem entradas no período.</p>}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma entrada registada.</p>)}
-             </Card>
-             <Card className="p-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-red-500" size={20}/> Formas de Pagamento (Saídas)</h3>
-                {sortedExpensePayments.length > 0 ? (
-                  <div className="space-y-5">
-                    {sortedExpensePayments.map(([method, val]) => {
-                      const percent = totals.expense > 0 ? ((val / totals.expense) * 100).toFixed(1) : 0;
-                      return (
-                        <div key={method}>
-                          <div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-slate-800 text-red-600">-R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div>
-                          <div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-red-500 h-2.5 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
+                  <div>
+                     <p className="text-sm font-bold text-red-600 mb-3 border-b border-slate-100 pb-2">Saídas (Despesas)</p>
+                     {sortedExpensePayments.length > 0 ? (
+                        <div className="space-y-3">
+                           {sortedExpensePayments.map(([method, total]) => (
+                              <div key={method} className="flex justify-between items-center"><span className="text-slate-600 text-sm font-medium">{method}</span><span className="font-bold text-slate-800">{formatCurrency(total)}</span></div>
+                           ))}
                         </div>
-                      )
-                    })}
+                     ) : <p className="text-sm text-slate-400 italic">Sem saídas no período.</p>}
                   </div>
-                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
-             </Card>
-           </div>
-           <Card className="p-6 flex flex-col h-full">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2"><Calendar className="text-blue-500" size={20}/> Atividade Recente</h3>
-                <button onClick={() => setCurrentView('transactions')} className="text-sm font-bold text-emerald-600 hover:text-emerald-700">Ver tudo</button>
-              </div>
-              <div className="space-y-4 flex-1">
-                {filteredTransactions.slice(0,8).map(tx => (
-                  <div key={tx.id} className="flex items-center justify-between group">
-                    <div className="flex items-center gap-4 overflow-hidden">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{tx.type === 'income' ? <ArrowUpCircle size={20}/> : <ArrowDownCircle size={20}/>}</div>
-                      <div className="min-w-0"><p className="font-bold text-slate-800 text-sm truncate">{tx.category}</p><p className="text-xs text-slate-500 truncate">{formatDate(tx.date)} &bull; {tx.paymentMethod}</p></div>
-                    </div>
-                    <div className={`font-bold text-sm shrink-0 pl-4 ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? `+R$ ${formatNumber(tx.amount)}` : `-R$ ${formatNumber(tx.amount)}`}</div>
-                  </div>
-                ))}
-                {filteredTransactions.length === 0 && <div className="text-center py-12 h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl"><p className="text-slate-500 font-medium">Nenhuma atividade recente.</p></div>}
-              </div>
-           </Card>
+               </div>
+            </Card>
+
+            <Card className="p-6">
+               <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800">Últimos Lançamentos</h3><button onClick={() => setCurrentView('transactions')} className="text-sm font-medium text-emerald-600 hover:text-emerald-700">Ver todos</button></div>
+               <div className="space-y-4">
+                  {recentTx.length === 0 ? (
+                     <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200"><p className="text-slate-500">Nenhum lançamento recente.</p></div>
+                  ) : (
+                     recentTx.map(tx => (
+                        <div key={tx.id} onClick={() => handleOpenModal(tx)} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer border border-transparent hover:border-slate-100 group">
+                           <div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${tx.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>{tx.type === 'income' ? <ArrowUpCircle size={20}/> : <ArrowDownCircle size={20}/>}</div><div><p className="font-bold text-slate-800 text-sm">{tx.category}</p><p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5"><Calendar size={12}/> {formatDate(tx.date)} • {tx.paymentMethod}</p></div></div>
+                           <div className={`font-bold ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? '+' : '-'} R$ {formatNumber(tx.amount)}</div>
+                        </div>
+                     ))
+                  )}
+               </div>
+            </Card>
         </div>
       </div>
     );
@@ -704,87 +706,110 @@ function DashboardApp({ userProfile }) {
 
   const renderTransactions = () => (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Lançamentos</h2><p className="text-slate-500 text-sm mt-1">O seu caixa real diário.</p></div>
-        <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="bg-white" icon={Download}>Excel</Button><Button onClick={() => handleOpenModal()} icon={Plus}>Novo Lançamento</Button></div>
-      </header>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+         <header><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Extrato Diário</h2><p className="text-slate-500 mt-1">Histórico completo de entradas e saídas.</p></header>
+         <div className="flex gap-3 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" icon={Download} className="flex-1 sm:flex-none">Excel</Button><Button onClick={() => handleOpenModal()} icon={Plus} className="flex-1 sm:flex-none">Novo</Button></div>
+      </div>
+      
       {renderFilterBar()}
       {renderFilterExtras()}
-      <div className="space-y-3">
-          {filteredTransactions.map(tx => (
-            <Card key={tx.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 transition-colors group ${tx.type === 'income' ? 'border-l-emerald-500 hover:border-emerald-200' : 'border-l-red-500 hover:border-red-200'}`}>
-              <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-slate-800 text-base truncate">{tx.category}</p>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-                    <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> {formatDate(tx.date)}</p>
-                    <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><CardIcon size={12}/> {tx.paymentMethod}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between sm:justify-end gap-4">
-                <div className={`font-bold text-lg ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? `+R$ ${formatNumber(tx.amount)}` : `-R$ ${formatNumber(tx.amount)}`}</div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => handleOpenModal(tx)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"><Edit2 size={18}/></button>
-                  <button onClick={() => requestDeleteTransaction(tx.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                </div>
-              </div>
-            </Card>
-          ))}
-          {filteredTransactions.length === 0 && <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500 font-medium">Nenhum lançamento encontrado.</div>}
-      </div>
+
+      <Card className="overflow-hidden">
+         <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+               <thead><tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider"><th className="p-4 font-bold">Data</th><th className="p-4 font-bold">Categoria (Descrição)</th><th className="p-4 font-bold">Pagamento</th><th className="p-4 font-bold text-right">Valor</th><th className="p-4 font-bold text-center">Ações</th></tr></thead>
+               <tbody className="divide-y divide-slate-100 text-sm">
+                  {filteredTransactions.length === 0 ? (<tr><td colSpan="5" className="p-8 text-center text-slate-500">Nenhum lançamento encontrado para este período/filtro.</td></tr>) : (
+                     filteredTransactions.map(tx => (
+                        <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
+                           <td className="p-4 text-slate-600 whitespace-nowrap">{formatDate(tx.date)}</td>
+                           <td className="p-4 font-medium text-slate-800">{tx.category}</td>
+                           <td className="p-4 text-slate-600"><span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 text-xs font-medium text-slate-700">{tx.paymentMethod}</span></td>
+                           <td className={`p-4 text-right font-bold whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? '+' : '-'} R$ {formatNumber(tx.amount)}</td>
+                           <td className="p-4">
+                              <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                 <button onClick={() => handleOpenModal(tx)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 size={16}/></button>
+                                 <button onClick={() => requestDeleteTransaction(tx.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                              </div>
+                           </td>
+                        </tr>
+                     ))
+                  )}
+               </tbody>
+            </table>
+         </div>
+      </Card>
     </div>
   );
 
   const renderBills = () => {
     const pendingBills = filteredBills.filter(b => b.status === 'pending');
+    
     const totals = pendingBills.reduce((acc, curr) => {
-      if (curr.type === 'income') acc.income += curr.amount; else acc.expense += curr.amount;
+      const val = parseFloat(curr.amount) || 0;
+      if (curr.type === 'income') acc.income += val; else acc.expense += val;
       return acc;
     }, { income: 0, expense: 0 });
+    
+    // Calcula o saldo previsto: Entradas a Receber - Contas a Pagar
     const balance = totals.income - totals.expense;
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Contas a Pagar e Receber</h2><p className="text-slate-500 text-sm mt-1">Previsões futuras. Ao dar baixa, o valor entra no caixa principal.</p></div>
-          <Button onClick={handleOpenBillModal} icon={Plus}>Novo Agendamento</Button>
-        </header>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+           <header><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Contas a Pagar e Receber</h2><p className="text-slate-500 mt-1">Previsões e agendamentos futuros. Ao dar baixa, o valor entra no caixa principal.</p></header>
+           <Button onClick={handleOpenBillModal} icon={Plus} className="w-full sm:w-auto shadow-md hover:shadow-lg">Novo Agendamento</Button>
+        </div>
+
         {renderFilterBar()}
         {renderFilterExtras()}
-        
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800">
-            <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Receipt size={14}/> Saldo Previsto</p>
-            <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
+
+        {/* CARTÕES DE PREVISÃO COM O SALDO PREVISTO EM DESTAQUE (bg-slate-800) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-slate-800 rounded-2xl p-6 shadow-xl transform hover:-translate-y-1 transition-transform duration-300">
+            <div className="flex items-center gap-2 mb-2 opacity-80 text-slate-300"><Receipt size={18} /><span className="text-xs font-bold uppercase tracking-wider">Saldo Previsto</span></div>
+            <h3 className="text-3xl font-black text-white">{formatCurrency(balance)}</h3>
           </div>
-          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowUpCircle size={14}/> Previsão Recebimentos</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
-          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowDownCircle size={14}/> Previsão Pagamentos</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2 text-slate-500"><ArrowDownCircle size={18} /><span className="text-xs font-bold uppercase tracking-wider">Previsão de Recebimentos</span></div>
+            <h3 className="text-3xl font-black text-emerald-600">{formatCurrency(totals.income)}</h3>
+          </Card>
+          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2 text-slate-500"><ArrowUpCircle size={18} /><span className="text-xs font-bold uppercase tracking-wider">Previsão de Pagamentos</span></div>
+            <h3 className="text-3xl font-black text-red-600">{formatCurrency(totals.expense)}</h3>
+          </Card>
         </div>
 
         <div className="space-y-4">
             <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider mb-2">Agendamentos Pendentes</h3>
-            {pendingBills.map(bill => {
-               const isOverdue = new Date(bill.dueDate) < new Date(new Date().setHours(0,0,0,0));
-               return (
-                 <Card key={bill.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 ${bill.type === 'income' ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
-                   <div className="flex items-center gap-4 w-full sm:w-auto">
-                     <div className="min-w-0 flex-1">
-                       <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{bill.category} {isOverdue && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase">Atrasado</span>}</p>
-                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1"><Calendar size={14}/> Vence em: {formatDate(bill.dueDate)}</p>
+            {pendingBills.length === 0 ? (
+               <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 shadow-sm"><p className="text-slate-500">Nenhuma conta pendente para este período.</p></div>
+            ) : (
+               pendingBills.map(bill => {
+                 const isOverdue = new Date(bill.dueDate) < new Date(new Date().toISOString().split('T')[0]);
+                 return (
+                   <Card key={bill.id} className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 hover:shadow-md transition-all group ${bill.type === 'income' ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
+                     <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
+                       <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${bill.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{bill.type === 'income' ? <ArrowDownCircle size={24}/> : <ArrowUpCircle size={24}/>}</div>
+                       <div className="min-w-0 flex-1">
+                         <div className="flex items-center gap-2 mb-1">
+                           <p className="font-bold text-slate-800 text-lg truncate">{bill.category}</p>
+                           {isOverdue && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">Atrasado</span>}
+                         </div>
+                         <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> Vence em: {formatDate(bill.dueDate)}</p>
+                       </div>
                      </div>
-                   </div>
-                   <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.amount)}` : `-R$ ${formatNumber(bill.amount)}`}</div>
-                      <div className="flex gap-2">
-                         <button onClick={() => openSettleModal(bill)} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors shadow-sm text-sm whitespace-nowrap">Dar Baixa</button>
-                         <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                      </div>
-                   </div>
-                 </Card>
-               )
-            })}
-            {pendingBills.length === 0 && <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500 font-medium">Nenhuma conta pendente para este período.</div>}
+                     <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-6 pt-4 sm:pt-0 border-t sm:border-0 border-slate-100 mt-2 sm:mt-0">
+                        <div className={`font-black text-xl whitespace-nowrap ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>R$ {formatNumber(bill.amount)}</div>
+                        <div className="flex gap-2">
+                          <button onClick={() => requestDeleteBill(bill.id)} className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors sm:opacity-0 sm:group-hover:opacity-100" title="Excluir"><Trash2 size={20}/></button>
+                          <button onClick={() => openSettleModal(bill)} className={`px-4 py-2.5 rounded-xl font-bold text-sm text-white shadow-sm transition-transform active:scale-95 ${bill.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>Dar Baixa</button>
+                        </div>
+                     </div>
+                   </Card>
+                 );
+               })
+            )}
 
             <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-2 mt-8 pt-6 border-t border-slate-200">Histórico de Contas Baixadas (Pagas/Recebidas)</h3>
             {filteredBills.filter(b => b.status === 'paid').map(bill => (
@@ -809,60 +834,77 @@ function DashboardApp({ userProfile }) {
 
   const renderCategories = () => (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Categorias</h2><p className="text-slate-500 mt-1">Crie as "gavetas" onde os seus lançamentos serão guardados.</p></header>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-            <h3 className="font-bold text-lg text-emerald-700 flex items-center gap-2"><ArrowUpCircle size={20}/> Entradas</h3>
-            <button onClick={() => handleOpenCategoryModal('income')} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
-          </div>
-          <div className="space-y-2">
-            {sortedIncomeCats.map(cat => (
-              <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 border border-slate-100 transition-colors">
-                <span className="font-medium text-slate-700">{cat}</span>
-                {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleOpenCategoryModal('income', cat)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md"><Edit2 size={16}/></button>
-                    <button onClick={() => requestDeleteCategory(cat, 'income')} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
+      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Categorias</h2><p className="text-slate-500 mt-1">Organize as suas finanças por grupos.</p></header>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+         <Card className="p-6">
+            <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-emerald-600 flex items-center gap-2"><ArrowUpCircle size={20}/> Entradas</h3><button onClick={() => setCategoryModal({ isOpen: true, type: 'income', originalName: '', currentName: '' })} className="text-emerald-600 hover:bg-emerald-50 p-2 rounded-lg transition-colors"><Plus size={20}/></button></div>
+            <div className="space-y-2">
+               {sortedIncomeCats.map(cat => (
+                  <div key={cat} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl group border border-transparent hover:border-slate-100 transition-colors">
+                     <span className="font-medium text-slate-700">{cat}</span>
+                     {cat !== 'Outros' && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <button onClick={() => setCategoryModal({ isOpen: true, type: 'income', originalName: cat, currentName: cat })} className="p-1.5 text-slate-400 hover:text-blue-600 rounded"><Edit2 size={16}/></button>
+                           <button onClick={() => requestDeleteCategory(cat, 'income')} className="p-1.5 text-slate-400 hover:text-red-600 rounded"><Trash2 size={16}/></button>
+                        </div>
+                     )}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-            <h3 className="font-bold text-lg text-red-600 flex items-center gap-2"><ArrowDownCircle size={20}/> Saídas</h3>
-            <button onClick={() => handleOpenCategoryModal('expense')} className="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
-          </div>
-          <div className="space-y-2">
-            {sortedExpenseCats.map(cat => (
-              <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 border border-slate-100 transition-colors">
-                <span className="font-medium text-slate-700">{cat}</span>
-                {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleOpenCategoryModal('expense', cat)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md"><Edit2 size={16}/></button>
-                    <button onClick={() => requestDeleteCategory(cat, 'expense')} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
+               ))}
+            </div>
+         </Card>
+         <Card className="p-6">
+            <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-red-600 flex items-center gap-2"><ArrowDownCircle size={20}/> Saídas</h3><button onClick={() => setCategoryModal({ isOpen: true, type: 'expense', originalName: '', currentName: '' })} className="text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"><Plus size={20}/></button></div>
+            <div className="space-y-2">
+               {sortedExpenseCats.map(cat => (
+                  <div key={cat} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl group border border-transparent hover:border-slate-100 transition-colors">
+                     <span className="font-medium text-slate-700">{cat}</span>
+                     {cat !== 'Outros' && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <button onClick={() => setCategoryModal({ isOpen: true, type: 'expense', originalName: cat, currentName: cat })} className="p-1.5 text-slate-400 hover:text-blue-600 rounded"><Edit2 size={16}/></button>
+                           <button onClick={() => requestDeleteCategory(cat, 'expense')} className="p-1.5 text-slate-400 hover:text-red-600 rounded"><Trash2 size={16}/></button>
+                        </div>
+                     )}
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
+               ))}
+            </div>
+         </Card>
       </div>
     </div>
   );
 
-  const renderSupport = () => (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto md:mx-0">
-      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Suporte e Ajuda</h2></header>
-      <Card className="bg-emerald-50/50 border border-emerald-100 p-8 shadow-sm">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
-          <div className="flex items-center gap-4"><div className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center shrink-0 text-white shadow-sm"><span className="material-symbols-outlined text-3xl">support_agent</span></div><div><h3 className="text-emerald-800 font-bold text-xl mb-1">Fale com um Humano</h3><p className="text-emerald-600/80 font-medium text-sm">Atendimento seg. a sex. das 09h às 18h</p></div></div>
-          <div className="w-full md:w-auto"><p className="text-slate-600 mb-4 font-medium md:max-w-[300px]">Precisa de ajuda para usar o sistema, relatar um problema ou reativar o seu plano? Clique no botão para chamar a nossa equipa técnica.</p><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
-        </div>
+  const renderPlans = () => (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl">
+      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
+      
+      <Card className="p-6 sm:p-8 border-t-4 border-t-emerald-500">
+         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-8 border-b border-slate-100">
+            <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">PLANO ATUAL</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan || 'Free'}</h3></div>
+            <div className="text-left sm:text-right"><span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 ${userProfile.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.status}</span><p className="text-sm text-slate-500 font-medium">{userProfile.plan === 'Admin' ? 'Acesso Vitalício' : `${userProfile.daysRemaining || 0} dias restantes`}</p></div>
+         </div>
+
+         <h4 className="font-bold text-slate-800 text-lg mb-4">Atualizar Assinatura</h4>
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* PLANO BÁSICO - COMO EDITAR: Altere o "Plano Básico", os "19,90" e as descrições abaixo conforme desejar. */}
+            <div className={`p-6 rounded-2xl border-2 transition-all relative ${userProfile.plan === 'Básico' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 hover:border-emerald-200'}`}>
+               {userProfile.plan === 'Básico' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">Atual</div>}
+               <h5 className="font-bold text-xl text-slate-800 mb-2">Plano Básico</h5>
+               <p className="text-slate-500 text-sm mb-6 min-h-[40px]">Lançamentos ilimitados diários e categorias personalizadas.</p>
+               <div className="mb-6"><span className="text-3xl font-black text-slate-800">R$ 9,90</span><span className="text-slate-500 font-medium">/mês</span></div>
+               <a href={`https://wa.me/5564993181827?text=Olá! Quero assinar o Plano Básico (R$ 9,90) do LD Finanças. Meu email é: ${userProfile.email}`} target="_blank" rel="noopener noreferrer" className="block w-full text-center py-3 px-4 rounded-xl font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">Assinar via WhatsApp</a>
+            </div>
+
+            {/* PLANO PRO - COMO EDITAR: Altere o "Plano Pro", os "29,90" e as descrições abaixo conforme desejar. */}
+            <div className={`p-6 rounded-2xl border-2 transition-all relative ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 hover:border-emerald-200'}`}>
+               {userProfile.plan === 'Pro' ? <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">Atual</div> : <div className="absolute -top-3 left-4 bg-amber-400 text-amber-900 text-xs font-bold px-3 py-1 rounded-full shadow-sm">MAIS VENDIDO</div>}
+               <h5 className="font-bold text-xl text-slate-800 mb-2 mt-2">Plano Pro</h5>
+               <p className="text-slate-500 text-sm mb-6 min-h-[40px]">Tudo do Básico + <strong className="text-slate-700">Gestão de Contas a Pagar e Receber</strong>.</p>
+               <div className="mb-6"><span className="text-3xl font-black text-emerald-600">R$ 19,90</span><span className="text-slate-500 font-medium">/mês</span></div>
+               <a href={`https://wa.me/5564993181827?text=Olá! Quero assinar o Plano Pro (R$ 19,90) do LD Finanças. Meu email é: ${userProfile.email}`} target="_blank" rel="noopener noreferrer" className="block w-full text-center py-3 px-4 rounded-xl font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 transition-colors">Assinar via WhatsApp</a>
+            </div>
+
+         </div>
       </Card>
-      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> e clique em <b>"Assinar via WhatsApp"</b>. Você será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode acessar de qualquer celular ou computador.</p></Card></div></div>
     </div>
   );
 
@@ -871,317 +913,277 @@ function DashboardApp({ userProfile }) {
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Como Funciona</h2><p className="text-slate-500 mt-1">Um passo a passo simples para dominar o sistema.</p></header>
       <div className="space-y-4">
          <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Acesse a aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Aluguel) e receitas (Serviço, Venda).</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Registre os valores que <b>já entraram ou saíram</b> de fato do seu bolso ou banco hoje.</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende seus boletos e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo do Painel Principal para ver o Mês. Em Lançamentos, clique em "Excel" para baixar e enviar para o contador.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Registre as Movimentações do Caixa</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Adicione os valores que você já pagou ou já recebeu no dia a dia para compor o seu saldo real.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar e Receber (Agendamentos)</h3><p className="text-slate-600">Nesta aba, você agenda as contas do futuro. Quando o dia chegar e você pagar o boleto, clique em <b>"Dar Baixa"</b>. O sistema automaticamente vai retirar a conta da agenda e enviar o valor direto para o seu Caixa Diário!</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo das telas para ver o resultado do Mês Específico. Na aba Lançamentos, clique em "Excel" para enviar ao seu contador.</p></div></Card>
       </div>
     </div>
   );
 
-  const renderPlans = () => {
-    const isAdmin = userProfile.email === ADMIN_EMAIL;
-
-    // SE FOR O ADMINISTRADOR, MOSTRA O PAINEL VIP DOURADO VITALÍCIO
-    if (isAdmin) {
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
-          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-400 bg-amber-50/30">
-            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6">
-                <div>
-                  <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-base">workspace_premium</span> Plano Atual</p>
-                  <h3 className="text-3xl font-black text-slate-800">Admin</h3>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span>
-                  <p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p>
-                </div>
-            </div>
-            <div className="text-center py-8">
-               <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div>
-               <h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4>
-               <p className="text-slate-600">Você tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
-            </div>
-          </Card>
-        </div>
-      );
-    }
-
+  const renderAdmin = () => {
+    if (userProfile.email !== ADMIN_EMAIL) return <div className="p-8 text-center text-slate-500">Acesso Negado</div>;
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
-        <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
-              <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
-              <div className="text-right"><span className={`inline-block font-bold px-3 py-1 rounded-full text-sm ${userProfile.daysRemaining > 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.daysRemaining > 0 ? 'Ativo' : 'Expirado'}</span><p className="text-sm text-slate-500 mt-2 font-medium">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias restantes`}</p></div>
-          </div>
-          <div className="space-y-6">
-              <h4 className="font-bold text-slate-800 text-lg">Atualizar Assinatura</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* --- CAIXINHA DO PLANO BÁSICO --- */}
-                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
-                  {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  
-                  {/* EDITAR AQUI O NOME E DESCRIÇÃO DO BÁSICO */}
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
-                  <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
-                  
-                  {/* EDITAR AQUI O VALOR DO BÁSICO */}
-                  <p className="text-2xl font-black text-slate-800 mb-6">R$ 9,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  
-                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
-                </div>
-
-                {/* --- CAIXINHA DO PLANO PRO --- */}
-                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
-                  {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
-                  
-                  {/* EDITAR AQUI O NOME E DESCRIÇÃO DO PRO */}
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
-                  <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
-                  
-                  {/* EDITAR AQUI O VALOR DO PRO */}
-                  <p className="text-2xl font-black text-emerald-600 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  
-                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
-                </div>
-
-              </div>
-          </div>
-        </Card>
+         <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Administrativo</h2><p className="text-slate-500 mt-1">Visão geral dos clientes do SaaS.</p></header>
+         <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+               <table className="w-full text-left border-collapse">
+                  <thead><tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider"><th className="p-4 font-bold">Usuário / Cadastro</th><th className="p-4 font-bold">Plano</th><th className="p-4 font-bold text-center">Dias Restantes</th><th className="p-4 font-bold text-center">Status</th><th className="p-4 font-bold text-center">Ações</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                     {adminUsers.map(user => (
+                        <tr key={user.uid} className="hover:bg-slate-50/50 transition-colors">
+                           <td className="p-4"><p className="font-bold text-slate-800">{user.name}</p><p className="text-xs text-slate-500">{user.email}</p><p className="text-xs text-slate-400 mt-1">Cad: {formatDate(user.createdAt?.split('T')[0])}</p></td>
+                           <td className="p-4"><span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase ${user.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-600'}`}>{user.plan}</span></td>
+                           <td className="p-4 text-center font-medium text-slate-700">{user.plan === 'Admin' ? 'Vitalício' : `${user.daysRemaining || 0} d`}</td>
+                           <td className="p-4 text-center"><span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${user.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{user.status}</span></td>
+                           <td className="p-4">
+                              <div className="flex justify-center gap-2">
+                                 <button onClick={() => handleToggleUserStatus(user)} className={`p-2 rounded-lg transition-colors ${user.status === 'Ativo' ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? 'Bloquear' : 'Desbloquear'}>{user.status === 'Ativo' ? <Lock size={16}/> : <LockOpen size={16}/>}</button>
+                                 <button onClick={() => handleOpenAdminEdit(user)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="Editar Plano"><Edit2 size={16}/></button>
+                                 {user.email !== ADMIN_EMAIL && <button onClick={() => handleDeleteAdminUser(user)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Excluir Conta"><Trash2 size={16}/></button>}
+                              </div>
+                           </td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+            </div>
+         </Card>
       </div>
-    );
-  };
-
-  const renderAdmin = () => (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Administrativo</h2><p className="text-slate-500 mt-1">Visão geral dos clientes do SaaS.</p></header>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-bold text-slate-500"><th className="p-4 whitespace-nowrap">Usuário</th><th className="p-4 whitespace-nowrap">WhatsApp</th><th className="p-4 whitespace-nowrap">Plano</th><th className="p-4 whitespace-nowrap">Dias</th><th className="p-4 whitespace-nowrap">Status</th><th className="p-4 whitespace-nowrap">Cadastro</th><th className="p-4 whitespace-nowrap">Ações</th></tr></thead>
-          <tbody className="text-sm">
-            {adminUsers.map(user => {
-              const isThisUserAdmin = user.email === ADMIN_EMAIL || user.plan === 'Admin';
-              const displayPlan = isThisUserAdmin ? 'Admin' : user.plan;
-              const displayDays = isThisUserAdmin || user.daysRemaining > 900 ? 'Vitalício' : `${user.daysRemaining} d`;
-
-              return (
-                <tr key={user.uid} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4"><p className="font-bold text-slate-800 whitespace-nowrap">{user.name}</p><p className="text-slate-500 text-xs">{user.email}</p></td>
-                  <td className="p-4 text-slate-500 whitespace-nowrap">{user.whatsapp || '-'}</td>
-                  <td className="p-4"><span className={`font-bold px-2 py-1 rounded text-xs uppercase shadow-sm ${isThisUserAdmin ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-700'}`}>{displayPlan}</span></td>
-                  <td className="p-4 font-medium text-slate-800">{displayDays}</td>
-                  <td className="p-4">
-                    {user.status === 'Ativo' 
-                      ? <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-1 rounded text-xs uppercase">Ativo</span>
-                      : <span className="text-red-700 bg-red-50 font-bold px-2 py-1 rounded text-xs uppercase">Bloqueado</span>
-                    }
-                  </td>
-                  <td className="p-4 text-slate-500">{formatDate(user.createdAt ? user.createdAt.split('T')[0] : '')}</td>
-                  <td className="p-4 flex gap-2">
-                    <button onClick={() => handleToggleUserStatus(user)} disabled={isThisUserAdmin} className={`p-2 rounded-lg transition-colors border disabled:opacity-30 disabled:cursor-not-allowed ${user.status === 'Ativo' ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`} title={user.status === 'Ativo' ? "Bloquear" : "Ativar"}>
-                      {user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}
-                    </button>
-                    <button onClick={() => handleOpenAdminEdit(user)} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors" title="Editar Plano">
-                      <Edit2 size={16}/>
-                    </button>
-                    <button onClick={() => handleDeleteAdminUser(user)} disabled={isThisUserAdmin} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Excluir">
-                      <Trash2 size={16}/>
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-            {adminUsers.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 font-medium">A carregar clientes...</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const NavItem = ({ id, icon: Icon, label }) => {
-    const isActive = currentView === id;
-    return (
-      <button onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>
-        <Icon size={20} className={isActive ? 'text-emerald-600' : 'text-slate-400'} />{label}
-      </button>
     );
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 md:flex font-sans text-slate-900">
-      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm"><div className="flex items-center gap-2 font-black text-xl text-slate-800 tracking-tight"><div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-sm">LD</div>FINANÇAS</div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600 bg-slate-50 rounded-xl active:bg-slate-100">{isMobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}</button></div>
-      <aside className={`fixed md:sticky top-0 left-0 h-[100dvh] w-72 bg-white border-r border-slate-200 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-6 hidden md:flex items-center gap-2 font-black text-2xl text-slate-800 tracking-tight border-b border-slate-100"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS</div>
-        <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
-          <NavItem id="dashboard" icon={Home} label="Início" />
-          <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
-          
-          {/* Liberação da aba para Free (Test-drive), Pro e Admin. Básico fica sem acesso. */}
-          {(userProfile.plan === 'Free' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
-             <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
-          )}
-          
-          <NavItem id="categories" icon={Tag} label="Categorias" />
-          <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
-          <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
-          <NavItem id="support" icon={HelpCircle} label="Suporte" />
-          {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
+    <div className="min-h-screen bg-slate-50 flex font-sans selection:bg-emerald-100 selection:text-emerald-900">
+      
+      {/* MENU LATERAL */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-100 transform transition-transform duration-300 ease-in-out flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static`}>
+        <div className="p-6 flex items-center justify-between border-b border-slate-50">
+           <div className="flex items-center gap-2 font-black text-xl text-slate-800 tracking-tight">
+             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-sm">LD</div>FINANÇAS
+           </div>
+           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 hover:text-slate-600"><X size={24}/></button>
         </div>
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.email === ADMIN_EMAIL || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
-          <button type="button" onClick={handleLogout} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 hover:border-red-100 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-hide">
+          <button onClick={() => {setCurrentView('dashboard'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'dashboard' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><Home size={20}/> Início</button>
+          <button onClick={() => {setCurrentView('transactions'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'transactions' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><CardIcon size={20}/> Lançamentos</button>
+          
+          {/* TRAVA DO PLANO: Só exibe Contas a Pagar/Receber para PRO, ADMIN ou FREE (Test-Drive) */}
+          {(userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.plan === 'Free') && (
+            <button onClick={() => {setCurrentView('bills'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'bills' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><Receipt size={20}/> Contas Pagar/Receber</button>
+          )}
+
+          <button onClick={() => {setCurrentView('categories'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'categories' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><Tag size={20}/> Categorias</button>
+          <button onClick={() => {setCurrentView('plans'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'plans' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><CardIcon size={20}/> Meu Plano</button>
+          <button onClick={() => {setCurrentView('tutorial'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${currentView === 'tutorial' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}><PlayCircle size={20}/> Como Funciona</button>
+          {userProfile.email === ADMIN_EMAIL && <button onClick={() => {setCurrentView('admin'); setIsMobileMenuOpen(false)}} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium mt-4 border border-slate-200 ${currentView === 'admin' ? 'bg-slate-800 text-white border-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}><ShieldAlert size={20}/> Painel Admin</button>}
+        </nav>
+
+        <div className="p-4 mt-auto">
+           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+             <p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p>
+             <p className="text-xs text-slate-500 truncate mb-3">{userProfile.email}</p>
+             <div className="flex items-center justify-between"><span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${userProfile.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'bg-emerald-100 text-emerald-700'}`}>{userProfile.plan}</span>{userProfile.plan !== 'Admin' && <span className="text-[10px] font-medium text-slate-500">{userProfile.daysRemaining}d</span>}</div>
+           </div>
+           <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 mt-2 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors"><LogOut size={16}/> Sair do Sistema</button>
         </div>
       </aside>
-      {isMobileMenuOpen && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />)}
-      
-      <main className="flex-1 w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-10 pb-24 overflow-x-hidden">
-        {userProfile.status === 'Bloqueado' ? (
-          <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-white rounded-3xl border border-red-100 shadow-sm mt-10">
-             <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">
-                <Lock size={40} />
-             </div>
-             <h2 className="text-2xl font-bold text-slate-800 mb-2">Acesso Bloqueado</h2>
-             {userProfile.daysRemaining <= 0 ? (
-               <p className="text-slate-600 mb-8 max-w-md mx-auto">O seu plano expirou! A sua conta encontra-se temporariamente suspensa. Por favor, entre em contato com o suporte para renovar a sua assinatura e continuar a gerenciar as suas finanças.</p>
-             ) : (
-               <p className="text-slate-600 mb-8 max-w-md mx-auto">A sua conta foi suspensa pelo Administrador do sistema. Por favor, entre em contato com o suporte para obter mais detalhes.</p>
-             )}
-             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, minha conta está bloqueada no LD Finanças e preciso de ajuda para renovar.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
-                <Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair da Conta</Button>
-             </div>
-          </div>
-        ) : (
-          <>
-            {currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'bills' && renderBills()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}
-          </>
+
+      {/* ÁREA PRINCIPAL */}
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
+        {/* BLOQUEIO DE TELA POR STATUS (Para devedores) */}
+        {userProfile.status !== 'Ativo' && userProfile.plan !== 'Admin' && (
+            <div className="absolute inset-0 z-40 bg-slate-50 flex items-center justify-center p-4">
+               <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center border border-slate-100">
+                   <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><Lock size={32}/></div>
+                   <h2 className="text-2xl font-bold text-slate-800 mb-2">Acesso Suspenso</h2>
+                   <p className="text-slate-600 mb-8">
+                     {userProfile.daysRemaining <= 0 
+                        ? "Sua assinatura expirou. Para continuar aproveitando todas as funcionalidades e não perder seus dados, renove agora mesmo!" 
+                        : "Sua conta foi suspensa temporariamente. Entre em contato com o suporte para reativar seu acesso."}
+                   </p>
+                   <a href={`https://wa.me/5564993181827?text=Olá! Minha conta está bloqueada e quero regularizar meu acesso. Meu email é: ${userProfile.email}`} target="_blank" rel="noopener noreferrer" className="block w-full text-center py-3.5 px-4 rounded-xl font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 transition-colors">Falar com o Suporte (WhatsApp)</a>
+                   <button onClick={handleLogout} className="mt-4 text-sm font-medium text-slate-500 hover:text-slate-700">Sair da Conta</button>
+               </div>
+            </div>
         )}
+
+        <header className="lg:hidden bg-white border-b border-slate-100 p-4 flex items-center justify-between sticky top-0 z-30">
+           <div className="flex items-center gap-2 font-black text-lg text-slate-800"><div className="w-6 h-6 bg-emerald-600 rounded flex items-center justify-center text-white text-[10px]">LD</div>FINANÇAS</div>
+           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-600 bg-slate-50 rounded-xl"><Menu size={20}/></button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 scroll-smooth">
+          <div className="max-w-6xl mx-auto">
+             {currentView === 'dashboard' && renderDashboard()}
+             {currentView === 'transactions' && renderTransactions()}
+             {currentView === 'bills' && renderBills()}
+             {currentView === 'categories' && renderCategories()}
+             {currentView === 'plans' && renderPlans()}
+             {currentView === 'tutorial' && renderTutorial()}
+             {currentView === 'admin' && renderAdmin()}
+          </div>
+        </div>
       </main>
 
-      {/* Modal de Transação */}
+      {/* OVERLAY MOBILE */}
+      {isMobileMenuOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />}
+
+      {/* MODAL NOVO LANÇAMENTO (CAIXA DIÁRIO) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">{formData.type === 'income' ? <ArrowUpCircle className="text-emerald-500"/> : <ArrowDownCircle className="text-red-500"/>}{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3><button onClick={handleCloseModal} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <div className="p-6">
-                <form onSubmit={handleSaveTransaction}>
-                  <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${formData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Entrada (+)</button><button type="button" onClick={() => handleTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${formData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>Saída (-)</button></div>
-                  <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
-                  {formData.category.toLowerCase().includes('outros') && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                      <Input label="O que foi? (Breve descrição)" name="customDescription" value={formData.customDescription} onChange={handleFormChange} placeholder="Ex: Feira, Assinatura de Revista..." required />
-                    </div>
-                  )}
-                  <Input label="Valor (R$)" name="amount" type="text" inputMode="decimal" value={formData.amount} onChange={handleFormChange} placeholder="0,00" required />
-                  <Select label="Forma de Pagamento" name="paymentMethod" value={formData.paymentMethod} onChange={handleFormChange} options={PAYMENT_METHODS} required />
-                  <Input label="Data" name="date" type="date" value={formData.date} onChange={handleFormChange} required />
-                  <div className="mt-8 flex gap-3"><button type="button" onClick={handleCloseModal} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white transition-colors shadow-sm ${formData.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{editingId ? 'Salvar' : 'Confirmar'}</button></div>
-                </form>
-             </div>
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+               <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CardIcon size={24} className="text-emerald-600"/> {editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3>
+               <button onClick={handleCloseModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+              <button onClick={() => handleTypeToggle('expense')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'expense' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Saída</button>
+              <button onClick={() => handleTypeToggle('income')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${formData.type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Entrada</button>
+            </div>
+
+            <form onSubmit={handleSaveTransaction}>
+              <div className="mb-6"><label className="text-sm font-bold text-slate-700 mb-2 block">Valor (R$)</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">R$</span><input type="text" name="amount" value={formData.amount} onChange={handleFormChange} required placeholder="0,00" className={`w-full border-2 rounded-xl pl-12 pr-4 py-4 text-2xl font-black focus:outline-none focus:ring-0 transition-all ${formData.type === 'expense' ? 'text-red-600 border-red-100 focus:border-red-500 bg-red-50/30' : 'text-emerald-600 border-emerald-100 focus:border-emerald-500 bg-emerald-50/30'}`} /></div></div>
+              <Input label="Data" name="date" type="date" value={formData.date} onChange={handleFormChange} required />
+              <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} options={formData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} required />
+              {formData.category.toLowerCase() === 'outros' && <Input label="Descrição da Categoria (Ex: Combustível)" name="customDescription" value={formData.customDescription} onChange={handleFormChange} required placeholder="Digite a descrição..." />}
+              <Select label="Forma de Pagamento" name="paymentMethod" value={formData.paymentMethod} onChange={handleFormChange} options={PAYMENT_METHODS} required />
+              
+              <div className="mt-8 flex gap-3"><button type="button" onClick={handleCloseModal} className="flex-1 py-3.5 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className={`flex-1 py-3.5 px-4 font-bold rounded-xl text-white transition-colors shadow-sm ${formData.type === 'expense' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Salvar</button></div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Modal Contas a Pagar/Receber */}
+      {/* MODAL DE AGENDAMENTO (CONTAS A PAGAR E RECEBER) - SEM TITULO, COM CATEGORIAS */}
       {isBillModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBillModalOpen(false)}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Receipt className="text-slate-400"/> Novo Agendamento</h3><button onClick={() => setIsBillModalOpen(false)} className="p-2 text-slate-400 bg-slate-100 rounded-full"><X size={20}/></button></div>
-             <form onSubmit={handleSaveBill} className="p-6">
-                <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => setBillFormData({...billFormData, type: 'income', category: sortedIncomeCats[0]})} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>A Receber (+)</button><button type="button" onClick={() => setBillFormData({...billFormData, type: 'expense', category: sortedExpenseCats[0]})} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>A Pagar (-)</button></div>
-                
-                <Select label="Categoria" name="category" value={billFormData.category} onChange={handleBillFormChange} required options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
-                {billFormData.category.toLowerCase().includes('outros') && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                      <Input label="O que foi? (Breve descrição)" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} placeholder="Ex: Conta de Luz..." required />
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6 sticky top-0 bg-white z-20 pb-2">
+               <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Receipt size={24} className="text-slate-500"/> Novo Agendamento</h3>
+               <button onClick={() => setIsBillModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+              <button onClick={() => setBillFormData({...billFormData, type: 'income', category: sortedIncomeCats[0] || '', customDescription: ''})} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>A Receber (+)</button>
+              <button onClick={() => setBillFormData({...billFormData, type: 'expense', category: sortedExpenseCats[0] || '', customDescription: ''})} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'expense' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>A Pagar (-)</button>
+            </div>
+
+            <form onSubmit={handleSaveBill}>
+              {/* REMOVIDO TÍTULO - USANDO CATEGORIAS AGORA */}
+              <Select label="Categoria" name="category" value={billFormData.category} onChange={handleBillFormChange} options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} required />
+              {billFormData.category.toLowerCase() === 'outros' && <Input label="Descrição da Categoria (Ex: Aluguel da Loja)" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} required placeholder="Digite a descrição..." />}
+              
+              <Input label="Valor Previsto (R$)" name="amount" value={billFormData.amount} onChange={handleBillFormChange} required placeholder="0,00" />
+              <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={handleBillFormChange} required />
+              
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 mt-2">
+                 <label className="flex items-center gap-3 cursor-pointer mb-2">
+                    <input type="checkbox" name="isRecurring" checked={billFormData.isRecurring} onChange={handleBillFormChange} className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                    <span className="font-medium text-slate-700">Esta conta se repete mensalmente?</span>
+                 </label>
+                 {billFormData.isRecurring && (
+                    <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                       <Input label="Repetir por quantos meses?" name="recurrenceMonths" type="number" min="2" max="60" value={billFormData.recurrenceMonths} onChange={handleBillFormChange} required placeholder="Ex: 12" />
+                       <p className="text-xs text-slate-500 mt-[-10px]">O sistema criará {billFormData.recurrenceMonths} agendamentos, vencendo dia {billFormData.dueDate.split('-')[2]} de cada mês.</p>
                     </div>
-                )}
-                
-                <Input label="Valor Previsto (R$)" name="amount" type="text" inputMode="decimal" value={billFormData.amount} onChange={handleBillFormChange} placeholder="0,00" required />
-                <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={handleBillFormChange} required />
-                
-                <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                   <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" name="isRecurring" checked={billFormData.isRecurring} onChange={handleBillFormChange} className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                      <span className="font-medium text-slate-700 text-sm">É um pagamento mensal recorrente?</span>
-                   </label>
-                   {billFormData.isRecurring && (
-                      <div className="mt-4 pt-4 border-t border-slate-200 animate-in fade-in duration-300">
-                        <Input label="Repetir por quantos meses?" name="recurrenceMonths" type="number" min="2" value={billFormData.recurrenceMonths} onChange={handleBillFormChange} required={billFormData.isRecurring} />
-                      </div>
-                   )}
-                </div>
+                 )}
+              </div>
 
-                <div className="mt-8 flex gap-3"><button type="button" onClick={() => setIsBillModalOpen(false)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl text-white bg-slate-800 hover:bg-slate-900 shadow-sm">Agendar</button></div>
-             </form>
+              <div className="mt-6 flex gap-3"><button type="button" onClick={() => setIsBillModalOpen(false)} className="flex-1 py-3.5 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3.5 px-4 font-bold rounded-xl bg-slate-800 hover:bg-slate-900 text-white transition-colors shadow-sm">Agendar Conta</button></div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Modal Dar Baixa na Conta */}
-      {settleModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModal({...settleModal, isOpen: false})}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CheckCircle className={settleModal.bill?.type === 'income' ? 'text-emerald-500' : 'text-red-500'} size={24}/>{settleModal.bill?.type === 'income' ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}</h3><button onClick={() => setSettleModal({...settleModal, isOpen: false})} className="p-2 text-slate-400 bg-slate-100 rounded-full"><X size={20}/></button></div>
-             <form onSubmit={handleSettleBillSubmit} className="p-6">
-                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                   <p className="text-sm font-bold text-slate-700 mb-1">Conta: <span className="font-medium text-slate-600">{settleModal.bill?.category}</span></p>
-                   <p className="text-sm font-bold text-slate-700">Valor Original: <span className="font-medium text-slate-600">R$ {formatNumber(settleModal.bill?.amount)}</span></p>
-                </div>
-                
-                <Select label="Forma de Pagamento Utilizada" name="paymentMethod" value={settleModal.paymentMethod} onChange={(e) => setSettleModal({...settleModal, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
-                <Input label="Qual foi o valor final (com multas/descontos)?" name="paidAmount" type="text" inputMode="decimal" value={settleModal.paidAmount} onChange={(e) => setSettleModal({...settleModal, paidAmount: e.target.value})} placeholder="0,00" required />
+      {/* MODAL DE BAIXA (PAGAR/RECEBER) COM FORMA DE PAGAMENTO */}
+      {settleModal.isOpen && settleModal.bill && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] })}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6">
+             <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CheckCircle size={24} className="text-emerald-500"/> Confirmar {settleModal.bill.type === 'income' ? 'Recebimento' : 'Pagamento'}</h3>
+                <button onClick={() => setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] })} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full"><X size={18}/></button>
+             </div>
+             
+             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6">
+                <p className="text-sm text-slate-600 mb-1"><span className="font-bold text-slate-800">Conta:</span> {settleModal.bill.category}</p>
+                <p className="text-sm text-slate-600"><span className="font-bold text-slate-800">Valor Original:</span> {formatCurrency(settleModal.bill.amount)}</p>
+             </div>
+
+             <form onSubmit={handleSettleBillSubmit}>
+                <Input label="Qual foi o valor final (com multas/descontos)?" name="paidAmount" value={settleModal.paidAmount} onChange={(e) => setSettleModal({...settleModal, paidAmount: e.target.value})} required placeholder="Ex: 200,00" />
                 <Input label="Data efetiva" name="paymentDate" type="date" value={settleModal.paymentDate} onChange={(e) => setSettleModal({...settleModal, paymentDate: e.target.value})} required />
+                <Select label="Forma de Pagamento" name="paymentMethod" value={settleModal.paymentMethod} onChange={(e) => setSettleModal({...settleModal, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
                 
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setSettleModal({...settleModal, isOpen: false})} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${settleModal.bill?.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>Dar Baixa no Caixa</button></div>
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${settleModal.bill.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>Dar Baixa no Caixa</button></div>
              </form>
           </div>
         </div>
       )}
 
-      {/* Modal de Editar/Criar Categoria */}
+      {/* MODAL CATEGORIA */}
       {categoryModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Tag className="text-slate-400" size={24}/>{categoryModal.originalName ? 'Editar Categoria' : 'Nova Categoria'}</h3><button onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveCategory} className="p-6">
-                <Input label="Nome da Categoria" name="currentName" value={categoryModal.currentName} onChange={(e) => setCategoryModal({...categoryModal, currentName: e.target.value})} placeholder="Ex: Aluguel" required />
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">{categoryModal.originalName ? 'Atualizar' : 'Salvar'}</button></div>
-             </form>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' })}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6">
+            <h3 className="text-xl font-bold text-slate-800 mb-6">{categoryModal.originalName ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+            <form onSubmit={handleSaveCategory}>
+              <Input label="Nome da Categoria" value={categoryModal.currentName} onChange={(e) => setCategoryModal({...categoryModal, currentName: e.target.value})} required placeholder="Ex: Alimentação" />
+              <div className="mt-6 flex gap-3"><button type="button" onClick={() => setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar</button></div>
+            </form>
           </div>
         </div>
       )}
 
       {/* NOVO: Modal de Edição do Admin (Planos e Dias) */}
-      {adminEditModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Settings className="text-slate-400" size={24}/>Editar Plano do Cliente</h3><button onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveAdminEdit} className="p-6">
-                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
-                   <div>
-                     <p className="text-sm font-bold text-slate-700 mb-1">Cliente: <span className="font-medium text-slate-600">{adminEditModal.user?.name}</span></p>
-                     <p className="text-sm font-bold text-slate-700">E-mail: <span className="font-medium text-slate-600">{adminEditModal.user?.email}</span></p>
-                   </div>
-                   {/* Botão de Renovação Rápida */}
-                   <button type="button" onClick={() => {
-                      const currentDays = parseInt(adminEditModal.daysRemaining) || 0;
-                      // Se o cara atrasou (chegou a 0), reseta pra 30. Se adiantou o pagamento, soma os 30 aos dias que ele já tinha.
-                      const newDays = currentDays <= 0 ? 30 : currentDays + 30;
-                      setAdminEditModal({...adminEditModal, daysRemaining: newDays});
-                   }} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
-                     +30 Dias
-                   </button>
-                </div>
-                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={['Free', 'Básico', 'Pro', 'Admin']} required />
+      {adminEditModal.isOpen && adminEditModal.user && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 })}></div>
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6 sm:p-8">
+             <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Settings size={24} className="text-slate-500"/> Editar Plano do Cliente</h3>
+                <button onClick={() => setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 })} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+             </div>
+             
+             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 flex justify-between items-center">
+                 <div>
+                    <p className="text-sm text-slate-600"><span className="font-bold text-slate-800">Cliente:</span> {adminEditModal.user.name}</p>
+                    <p className="text-sm text-slate-600"><span className="font-bold text-slate-800">E-mail:</span> {adminEditModal.user.email}</p>
+                 </div>
+                 {/* BOTÃO MÁGICO DE RENOVAÇÃO RÁPIDA */}
+                 <button 
+                    type="button"
+                    onClick={() => {
+                        let currentDays = parseInt(adminEditModal.daysRemaining);
+                        if(isNaN(currentDays)) currentDays = 0;
+                        setAdminEditModal({...adminEditModal, daysRemaining: currentDays + 30});
+                    }}
+                    className="bg-emerald-100 text-emerald-700 font-bold py-1.5 px-3 rounded-lg text-sm hover:bg-emerald-200 transition-colors"
+                    title="Adicionar 30 dias ao saldo atual"
+                 >
+                    +30 Dias
+                 </button>
+             </div>
+
+             <form onSubmit={handleSaveAdminEdit}>
+                <Select 
+                  label="Novo Plano" 
+                  name="plan" 
+                  value={adminEditModal.plan} 
+                  onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} 
+                  options={[
+                    { value: 'Free', label: 'Free' },
+                    { value: 'Básico', label: 'Básico (R$ 9,90/mês)' },
+                    { value: 'Pro', label: 'Pro (R$ 19,90/mês)' },
+                    { value: 'Admin', label: 'Admin (Vitalício)' }
+                  ]} 
+                  required 
+                />
                 <Input label="Dias Restantes (Digite manualmente se necessário)" name="daysRemaining" type="number" inputMode="numeric" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
                 <p className="text-xs text-slate-500 mt-[-10px] mb-4">* Digite um número muito alto (ex: 999) para tornar o acesso vitalício.</p>
                 <div className="mt-6 flex gap-3"><button type="button" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
