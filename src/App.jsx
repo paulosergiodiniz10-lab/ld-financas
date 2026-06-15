@@ -539,10 +539,10 @@ function DashboardApp({ userProfile }) {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="p-6 border-none shadow-md bg-slate-800 text-white">
+          <div className="p-6 rounded-2xl shadow-md bg-slate-800 text-white border border-slate-700">
             <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p>
             <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
-          </Card>
+          </div>
           <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
             <p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Entradas</p>
             <h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3>
