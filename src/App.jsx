@@ -272,11 +272,11 @@ function DashboardApp({ userProfile }) {
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
 
-  // Modal para Contas a Pagar (Agendamentos) - REMOVIDO TITLE E ADD CATEGORY LOGIC
+  // Modal para Contas a Pagar (Agendamentos)
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
   
-  // Modal para dar Baixa na Conta - ADD PAYMENT METHOD
+  // Modal para dar Baixa na Conta
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
@@ -448,6 +448,10 @@ function DashboardApp({ userProfile }) {
   };
 
   // ===================== CATEGORIAS =====================
+  const handleOpenCategoryModal = (type, categoryName = null) => {
+    setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
+  };
+
   const handleSaveCategory = async (e) => {
     e.preventDefault();
     const { originalName, currentName, type } = categoryModal;
