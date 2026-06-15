@@ -685,10 +685,10 @@ function DashboardApp({ userProfile }) {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <Card className="p-6 border-none shadow-md text-white bg-slate-800">
+          <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800">
             <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-2"><Wallet size={14}/> Saldo Previsto</p>
             <h3 className={`text-3xl font-black ${predictedBalance < 0 ? 'text-red-400' : 'text-white'}`}>{predictedBalance < 0 ? `-R$ ${formatNumber(Math.abs(predictedBalance))}` : `R$ ${formatNumber(predictedBalance)}`}</h3>
-          </Card>
+          </div>
           <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
             <p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-2"><ArrowUpCircle size={14}/> Previsão de Recebimentos</p>
             <h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(toReceive)}</h3>
