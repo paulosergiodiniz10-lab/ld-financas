@@ -637,8 +637,8 @@ function DashboardApp({ userProfile }) {
             <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p>
             <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
           </div>
-          <Card className="p-6 border-l-4 border-l-emerald-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Entradas</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
-          <Card className="p-6 border-l-4 border-l-red-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Saídas</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Entradas</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Saídas</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
@@ -709,7 +709,7 @@ function DashboardApp({ userProfile }) {
       {renderFilterExtras()}
       <div className="space-y-3">
           {filteredTransactions.map(tx => (
-            <Card key={tx.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 ${tx.type === 'income' ? 'border-l-emerald-500 hover:border-emerald-200' : 'border-l-red-500 hover:border-red-200'}`}>
+            <Card key={tx.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 transition-colors group ${tx.type === 'income' ? 'border-l-emerald-500 hover:border-emerald-200' : 'border-l-red-500 hover:border-red-200'}`}>
               <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-slate-800 text-base truncate">{tx.category}</p>
@@ -722,8 +722,8 @@ function DashboardApp({ userProfile }) {
               <div className="flex items-center justify-between sm:justify-end gap-4">
                 <div className={`font-bold text-lg ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? `+R$ ${formatNumber(tx.amount)}` : `-R$ ${formatNumber(tx.amount)}`}</div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={() => handleOpenModal(tx)} className="p-2 text-blue-600 bg-blue-50 rounded-lg"><Edit2 size={18}/></button>
-                  <button onClick={() => requestDeleteTransaction(tx)} className="p-2 text-red-600 bg-red-50 rounded-lg"><Trash2 size={18}/></button>
+                  <button onClick={() => handleOpenModal(tx)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"><Edit2 size={18}/></button>
+                  <button onClick={() => requestDeleteTransaction(tx)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
                 </div>
               </div>
             </Card>
@@ -755,8 +755,8 @@ function DashboardApp({ userProfile }) {
             <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Receipt size={14}/> Saldo Previsto</p>
             <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
           </div>
-          <Card className="p-6 border-l-4 border-l-emerald-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowUpCircle size={14}/> Previsão Recebimentos</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
-          <Card className="p-6 border-l-4 border-l-red-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowDownCircle size={14}/> Previsão Pagamentos</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowUpCircle size={14}/> Previsão Recebimentos</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowDownCircle size={14}/> Previsão Pagamentos</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
         </div>
 
         <div className="space-y-4">
@@ -913,11 +913,26 @@ function DashboardApp({ userProfile }) {
           <div className="space-y-6">
               <h4 className="font-bold text-slate-800 text-lg">Atualizar Assinatura</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`border-2 rounded-xl p-5 relative transition-all border-emerald-500 bg-emerald-50/20 shadow-md`}>
-                  <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5><p className="text-slate-500 text-sm mb-4 h-10">Acesso completo ao sistema e atualizações.</p><p className="text-2xl font-black text-emerald-600 mb-6">R$ 10,00<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero renovar meu plano do LD Finanças!', '_blank')}>Renovar no WhatsApp</Button>
+                
+                {/* Plano Básico */}
+                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+                  {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
+                  <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
+                  <p className="text-2xl font-black text-slate-800 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
+                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
                 </div>
+
+                {/* Plano Pro */}
+                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+                  {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
+                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
+                  <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
+                  <p className="text-2xl font-black text-emerald-600 mb-6">R$ 29,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
+                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
+                </div>
+
               </div>
           </div>
         </Card>
@@ -986,7 +1001,16 @@ function DashboardApp({ userProfile }) {
       <aside className={`fixed md:sticky top-0 left-0 h-[100dvh] w-72 bg-white border-r border-slate-200 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-6 hidden md:flex items-center gap-2 font-black text-2xl text-slate-800 tracking-tight border-b border-slate-100"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS</div>
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
-          <NavItem id="dashboard" icon={Home} label="Início" /><NavItem id="transactions" icon={Wallet} label="Lançamentos" /><NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" /><NavItem id="categories" icon={Tag} label="Categorias" /><NavItem id="plans" icon={CreditCard} label="Meu Plano" /><NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" /><NavItem id="support" icon={HelpCircle} label="Suporte" />
+          <NavItem id="dashboard" icon={Home} label="Início" />
+          <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
+          {/* Bloqueio da aba Contas Pagar/Receber para quem é Free/Básico */}
+          {(userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
+             <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
+          )}
+          <NavItem id="categories" icon={Tag} label="Categorias" />
+          <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
+          <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
+          <NavItem id="support" icon={HelpCircle} label="Suporte" />
           {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
@@ -1117,12 +1141,23 @@ function DashboardApp({ userProfile }) {
           <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
              <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Settings className="text-slate-400" size={24}/>Editar Plano do Cliente</h3><button onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
              <form onSubmit={handleSaveAdminEdit} className="p-6">
-                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                   <p className="text-sm font-bold text-slate-700 mb-1">Cliente: <span className="font-medium text-slate-600">{adminEditModal.user?.name}</span></p>
-                   <p className="text-sm font-bold text-slate-700">E-mail: <span className="font-medium text-slate-600">{adminEditModal.user?.email}</span></p>
+                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
+                   <div>
+                     <p className="text-sm font-bold text-slate-700 mb-1">Cliente: <span className="font-medium text-slate-600">{adminEditModal.user?.name}</span></p>
+                     <p className="text-sm font-bold text-slate-700">E-mail: <span className="font-medium text-slate-600">{adminEditModal.user?.email}</span></p>
+                   </div>
+                   {/* Botão de Renovação Rápida */}
+                   <button type="button" onClick={() => {
+                      const currentDays = parseInt(adminEditModal.daysRemaining) || 0;
+                      // Se o cara atrasou (chegou a 0), reseta pra 30. Se adiantou o pagamento, soma os 30 aos dias que ele já tinha.
+                      const newDays = currentDays === 0 ? 30 : currentDays + 30;
+                      setAdminEditModal({...adminEditModal, daysRemaining: newDays});
+                   }} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
+                     +30 Dias
+                   </button>
                 </div>
-                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={['Free', 'Pro', 'Admin']} required />
-                <Input label="Dias Restantes" name="daysRemaining" type="number" inputMode="numeric" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
+                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={['Free', 'Básico', 'Pro', 'Admin']} required />
+                <Input label="Dias Restantes (Digite manualmente se necessário)" name="daysRemaining" type="number" inputMode="numeric" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
                 <p className="text-xs text-slate-500 mt-[-10px] mb-4">* Digite um número muito alto (ex: 999) para tornar o acesso vitalício.</p>
                 <div className="mt-6 flex gap-3"><button type="button" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm">Salvar Alterações</button></div>
              </form>
