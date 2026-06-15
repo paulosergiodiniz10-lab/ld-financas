@@ -379,6 +379,18 @@ function DashboardApp({ userProfile }) {
 
   // ===================== CONTAS A PAGAR E RECEBER =====================
   const handleOpenBillModal = () => {
+    if (userProfile.plan === 'Básico') {
+      openConfirm(
+        'Plano Pro Necessário', 
+        'A criação de novos agendamentos é exclusiva do Plano Pro. Assine agora para continuar prevendo o seu futuro financeiro!', 
+        () => {
+           setCurrentView('plans');
+           closeConfirm();
+        }, 
+        true
+      );
+      return;
+    }
     setBillFormData({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: sortedExpenseCats[0] || '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
     setIsBillModalOpen(true);
   };
@@ -752,7 +764,9 @@ function DashboardApp({ userProfile }) {
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Contas a Pagar e Receber</h2><p className="text-slate-500 text-sm mt-1">Previsões futuras. Ao dar baixa, o valor entra no caixa principal.</p></div>
-          <Button onClick={handleOpenBillModal} icon={Plus}>Novo Agendamento</Button>
+          <Button onClick={handleOpenBillModal} icon={userProfile.plan === 'Básico' ? Lock : Plus} className={userProfile.plan === 'Básico' ? 'bg-slate-300 hover:bg-slate-400 text-slate-700' : ''}>
+            {userProfile.plan === 'Básico' ? 'Plano Pro' : 'Novo Agendamento'}
+          </Button>
         </header>
         {renderFilterBar()}
         {renderFilterExtras()}
@@ -1023,8 +1037,8 @@ function DashboardApp({ userProfile }) {
           <NavItem id="dashboard" icon={Home} label="Início" />
           <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
           
-          {/* Liberação da aba para Free (Test-drive), Pro e Admin. Básico fica sem acesso. */}
-          {(userProfile.plan === 'Free' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
+          {/* Liberação da aba para Free (Test-drive), Pro, Admin E TAMBÉM BÁSICO. */}
+          {(userProfile.plan === 'Free' || userProfile.plan === 'Básico' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
              <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
           )}
           
@@ -1066,6 +1080,7 @@ function DashboardApp({ userProfile }) {
       </main>
 
       {/* Modal de Transação */}
+      {}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
