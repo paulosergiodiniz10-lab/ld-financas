@@ -887,7 +887,22 @@ function DashboardApp({ userProfile }) {
   const renderTutorial = () => (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl">
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Como Funciona</h2><p className="text-slate-500 mt-1">Um passo a passo simples para dominar o sistema.</p></header>
-      <div className="space-y-4">
+      
+      {/* VÍDEO TUTORIAL ADICIONADO AQUI */}
+      <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-900 relative">
+         <video 
+           controls 
+           preload="metadata" 
+           playsInline
+           controlsList="nodownload"
+           className="w-full h-auto aspect-video object-cover"
+         >
+           <source src="https://ldsite.com.br/wp-content/uploads/2026/06/LD-FINANCAS-1.mp4" type="video/mp4" />
+           Seu navegador não suporta a visualização do vídeo.
+         </video>
+      </div>
+
+      <div className="space-y-4 mt-8">
          <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Acesse a aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Aluguel) e receitas (Serviço, Venda).</p></div></Card>
          <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Registre os valores que <b>já entraram ou saíram</b> de fato do seu bolso ou banco hoje.</p></div></Card>
          <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende seus boletos e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
@@ -1037,7 +1052,7 @@ function DashboardApp({ userProfile }) {
           <NavItem id="dashboard" icon={Home} label="Início" />
           <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
           
-          {/* Liberação da aba para Free (Test-drive), Pro, Admin E TAMBÉM BÁSICO. */}
+          {/* Liberação da aba para Free (Test-drive), Pro e Admin. Básico fica sem acesso. */}
           {(userProfile.plan === 'Free' || userProfile.plan === 'Básico' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
              <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
           )}
@@ -1080,7 +1095,6 @@ function DashboardApp({ userProfile }) {
       </main>
 
       {/* Modal de Transação */}
-      {}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
