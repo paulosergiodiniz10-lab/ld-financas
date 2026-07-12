@@ -1286,6 +1286,13 @@ export default function App() {
                   }
               }
 
+              // FORÇAR ATUALIZAÇÃO PARA ADMIN SE O E-MAIL BATER
+              if (userData.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
+                  updates.plan = 'Admin';
+                  updates.daysRemaining = 999;
+                  needsUpdate = true;
+              }
+
               if (needsUpdate) {
                   setDoc(docRef, updates, { merge: true });
                   setUserProfile({ uid: user.uid, ...userData, ...updates });
@@ -1293,7 +1300,16 @@ export default function App() {
                   setUserProfile({ uid: user.uid, ...userData });
               }
            } else {
-              const basicProfile = { name: 'Utilizador', email: user.email, plan: 'Free', daysRemaining: 30, status: 'Ativo', createdAt: new Date().toISOString() };
+              // CORREÇÃO: SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O E-MAIL DO DONO
+              const isOwner = user.email === ADMIN_EMAIL;
+              const basicProfile = { 
+                  name: 'Utilizador', 
+                  email: user.email, 
+                  plan: isOwner ? 'Admin' : 'Free', 
+                  daysRemaining: isOwner ? 999 : 30, 
+                  status: 'Ativo', 
+                  createdAt: new Date().toISOString() 
+              };
               setDoc(docRef, basicProfile);
               setUserProfile({ uid: user.uid, ...basicProfile });
            }
