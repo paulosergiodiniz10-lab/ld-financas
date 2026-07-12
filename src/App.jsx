@@ -8,14 +8,14 @@ import {
   getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot 
 } from "firebase/firestore";
 
-// --- CONFIGURAÇÃO DO FIREBASE (COFRE ORIGINAL - PROTEGE SEUS CLIENTES) ---
+// --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
-  apiKey: "AIzaSyAsOt0NLh50Vtxquzsq28-kPVAGaJnI8wg",
-  authDomain: "meu-sistema-financeiro-8a339.firebaseapp.com",
-  projectId: "meu-sistema-financeiro-8a339",
-  storageBucket: "meu-sistema-financeiro-8a339.firebasestorage.app",
-  messagingSenderId: "275895593683",
-  appId: "1:275895593683:web:7370680e4da2c4a6310226"
+  apiKey: "AIzaSyDlnaN0rfER6AAOBYJJ_uvsZN5LhtnR08k",
+  authDomain: "ld-financas.firebaseapp.com",
+  projectId: "ld-financas",
+  storageBucket: "ld-financas.firebasestorage.app",
+  messagingSenderId: "624668062422",
+  appId: "1:624668062422:web:ef3c197c249d0952e44f77"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -56,7 +56,8 @@ const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 
 // --- CONFIGURAÇÕES DO SISTEMA ---
-const ADMIN_EMAIL = "cnviagem@gmail.com"; // SEU NOVO EMAIL COMO ADMINISTRADOR VIP
+// MUDAMOS DE VOLTA PARA O SEU E-MAIL ORIGINAL QUE TEM OS DADOS!
+const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
 // --- UTILITÁRIOS ---
@@ -319,7 +320,7 @@ function DashboardApp({ userProfile }) {
 
     // Se for ADMIN, puxa todos os clientes
     let unsubUsers = () => {};
-    if (userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') {
+    if (userProfile.email === ADMIN_EMAIL) {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => { setAdminUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() }))); });
     }
@@ -912,7 +913,7 @@ function DashboardApp({ userProfile }) {
   );
 
   const renderPlans = () => {
-    const isAdmin = userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin';
+    const isAdmin = userProfile.email === ADMIN_EMAIL;
 
     // SE FOR O ADMINISTRADOR, MOSTRA O PAINEL VIP DOURADO VITALÍCIO
     if (isAdmin) {
@@ -1061,7 +1062,7 @@ function DashboardApp({ userProfile }) {
           <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
           <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
           <NavItem id="support" icon={HelpCircle} label="Suporte" />
-          {(userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
+          {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.email === ADMIN_EMAIL || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
@@ -1260,7 +1261,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Força a limpeza de cache local antes de ler o Firebase
+    // Força a limpeza de cache local antes de ler o Firebase para destrancar a tela antiga
     localStorage.clear();
     sessionStorage.clear();
 
@@ -1275,7 +1276,7 @@ export default function App() {
               let updates = {};
               let needsUpdate = false;
 
-              // FORÇAR ATUALIZAÇÃO PARA ADMIN SE O E-MAIL BATER (BLINDADO)
+              // BLINDAGEM MÁXIMA DE ADMIN: Força a atualização se o e-mail for o seu original
               if (user.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
                   updates.plan = 'Admin';
                   updates.daysRemaining = 999;
@@ -1304,10 +1305,10 @@ export default function App() {
                   setUserProfile({ uid: user.uid, ...userData });
               }
            } else {
-              // SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O E-MAIL DO DONO
+              // SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O SEU E-MAIL
               const isOwner = user.email === ADMIN_EMAIL;
               const basicProfile = { 
-                  name: 'Paulo Sérgio Diniz', 
+                  name: isOwner ? 'Paulo Sérgio Diniz' : 'Utilizador', 
                   email: user.email, 
                   plan: isOwner ? 'Admin' : 'Free', 
                   daysRemaining: isOwner ? 999 : 30, 
