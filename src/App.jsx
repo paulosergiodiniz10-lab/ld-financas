@@ -10,12 +10,12 @@ import {
 
 // --- CONFIGURAÇÃO DO FIREBASE (COFRE ORIGINAL - PROTEGE SEUS CLIENTES) ---
 const firebaseConfig = {
-  apiKey: "AIzaSyDlnaN0rfER6AAOBYJJ_uvsZN5LhtnR08k",
-  authDomain: "ld-financas.firebaseapp.com",
-  projectId: "ld-financas",
-  storageBucket: "ld-financas.firebasestorage.app",
-  messagingSenderId: "624668062422",
-  appId: "1:624668062422:web:ef3c197c249d0952e44f77"
+  apiKey: "AIzaSyAsOt0NLh50Vtxquzsq28-kPVAGaJnI8wg",
+  authDomain: "meu-sistema-financeiro-8a339.firebaseapp.com",
+  projectId: "meu-sistema-financeiro-8a339",
+  storageBucket: "meu-sistema-financeiro-8a339.firebasestorage.app",
+  messagingSenderId: "275895593683",
+  appId: "1:275895593683:web:7370680e4da2c4a6310226"
 };
 
 const app = initializeApp(firebaseConfig);
