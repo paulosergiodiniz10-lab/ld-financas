@@ -319,7 +319,7 @@ function DashboardApp({ userProfile }) {
 
     // Se for ADMIN, puxa todos os clientes
     let unsubUsers = () => {};
-    if (userProfile.email === ADMIN_EMAIL) {
+    if (userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => { setAdminUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() }))); });
     }
@@ -912,7 +912,7 @@ function DashboardApp({ userProfile }) {
   );
 
   const renderPlans = () => {
-    const isAdmin = userProfile.email === ADMIN_EMAIL;
+    const isAdmin = userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin';
 
     // SE FOR O ADMINISTRADOR, MOSTRA O PAINEL VIP DOURADO VITALÍCIO
     if (isAdmin) {
@@ -1061,7 +1061,7 @@ function DashboardApp({ userProfile }) {
           <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
           <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
           <NavItem id="support" icon={HelpCircle} label="Suporte" />
-          {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
+          {(userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.email === ADMIN_EMAIL || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
