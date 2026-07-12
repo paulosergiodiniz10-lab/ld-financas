@@ -1260,6 +1260,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Força a limpeza de cache local antes de ler o Firebase
+    localStorage.clear();
+    sessionStorage.clear();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
       if (user) {
@@ -1271,8 +1275,15 @@ export default function App() {
               let updates = {};
               let needsUpdate = false;
 
+              // FORÇAR ATUALIZAÇÃO PARA ADMIN SE O E-MAIL BATER (BLINDADO)
+              if (user.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
+                  updates.plan = 'Admin';
+                  updates.daysRemaining = 999;
+                  needsUpdate = true;
+              }
+
               // Robô de Desconto Automático de Dias
-              if (userData.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
+              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
                   const lastCheck = userData.lastDecrementDate || userData.createdAt?.split('T')[0] || today;
                   if (lastCheck !== today) {
                       const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
@@ -1286,13 +1297,6 @@ export default function App() {
                   }
               }
 
-              // FORÇAR ATUALIZAÇÃO PARA ADMIN SE O E-MAIL BATER
-              if (userData.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
-                  updates.plan = 'Admin';
-                  updates.daysRemaining = 999;
-                  needsUpdate = true;
-              }
-
               if (needsUpdate) {
                   setDoc(docRef, updates, { merge: true });
                   setUserProfile({ uid: user.uid, ...userData, ...updates });
@@ -1300,10 +1304,10 @@ export default function App() {
                   setUserProfile({ uid: user.uid, ...userData });
               }
            } else {
-              // CORREÇÃO: SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O E-MAIL DO DONO
+              // SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O E-MAIL DO DONO
               const isOwner = user.email === ADMIN_EMAIL;
               const basicProfile = { 
-                  name: 'Utilizador', 
+                  name: 'Paulo Sérgio Diniz', 
                   email: user.email, 
                   plan: isOwner ? 'Admin' : 'Free', 
                   daysRemaining: isOwner ? 999 : 30, 
