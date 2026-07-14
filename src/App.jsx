@@ -56,7 +56,6 @@ const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 
 // --- CONFIGURAÇÕES DO SISTEMA ---
-// MUDAMOS DE VOLTA PARA O SEU E-MAIL ORIGINAL QUE TEM OS DADOS!
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
@@ -154,7 +153,7 @@ const Auth = () => {
           daysRemaining: formData.email === ADMIN_EMAIL ? 999 : 30,
           status: 'Ativo',
           createdAt: createdAt,
-          lastDecrementDate: today // Registra o dia em que ganhou os dias para o robô saber
+          lastDecrementDate: today
         });
       }
     } catch (error) {
@@ -298,15 +297,12 @@ function DashboardApp({ userProfile }) {
   useEffect(() => {
     if (!userProfile?.uid) return;
 
-    // Puxa Lançamentos
     const txRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions');
     const unsubTx = onSnapshot(txRef, (snapshot) => { setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); });
 
-    // Puxa Contas a Pagar/Receber
     const billsRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills');
     const unsubBills = onSnapshot(billsRef, (snapshot) => { setBills(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); });
 
-    // Puxa Categorias
     const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
     const unsubCat = onSnapshot(catRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -318,15 +314,14 @@ function DashboardApp({ userProfile }) {
         }
     });
 
-    // Se for ADMIN, puxa todos os clientes
     let unsubUsers = () => {};
-    if (userProfile.email === ADMIN_EMAIL) {
+    if (userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => { setAdminUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() }))); });
     }
 
     return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
-  }, [userProfile?.uid]);
+  }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
 
   const handleLogout = () => openConfirm('Sair do Sistema', 'Tem certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
@@ -365,11 +360,8 @@ function DashboardApp({ userProfile }) {
 
   const requestDeleteTransaction = (id) => {
     openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? Isso afetará o seu saldo.', async () => {
-        // Encontra o Lançamento para ver se ele veio de uma Conta
         const txToDelete = transactions.find(t => t.id === id);
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
-        
-        // REVERTE CONTA SE EXISTIR CORDÃO UMBILICAL
         if (txToDelete && txToDelete.originBillId) {
             const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId);
             await setDoc(billRef, { status: 'pending', paymentDate: null, paidAmount: null }, { merge: true });
@@ -409,7 +401,6 @@ function DashboardApp({ userProfile }) {
     const baseDate = new Date(billFormData.dueDate + 'T12:00:00');
     const monthsToCreate = billFormData.isRecurring ? parseInt(billFormData.recurrenceMonths) : 1;
 
-    // Cria as parcelas usando apenas Categoria
     for (let i = 0; i < monthsToCreate; i++) {
         const currentDate = new Date(baseDate);
         currentDate.setMonth(currentDate.getMonth() + i);
@@ -444,15 +435,13 @@ function DashboardApp({ userProfile }) {
      if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
      let finalPaidAmount = Math.round((parseFloat(amountStr) || 0) * 100) / 100;
 
-     // 1. Atualiza a Conta para 'PAGA'
      const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', bill.id);
      await setDoc(billRef, { status: 'paid', paymentDate: settleModal.paymentDate, paidAmount: finalPaidAmount, updatedAt: new Date().toISOString() }, { merge: true });
 
-     // 2. CRIA O LANÇAMENTO DIÁRIO COM A FORMA DE PAGAMENTO ESCOLHIDA NA BAIXA
      const txRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', Date.now().toString());
      await setDoc(txRef, {
         amount: finalPaidAmount, type: bill.type, date: settleModal.paymentDate,
-        category: bill.category, paymentMethod: settleModal.paymentMethod, // AGORA USA O QUE O CLIENTE ESCOLHEU
+        category: bill.category, paymentMethod: settleModal.paymentMethod,
         originBillId: bill.id, 
         updatedAt: new Date().toISOString()
      });
@@ -519,7 +508,6 @@ function DashboardApp({ userProfile }) {
     const userRef = doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid);
     const today = new Date().toISOString().split('T')[0];
     
-    // Atualiza os dias, o plano, e reseta o marcador para começar a descontar de hoje
     await setDoc(userRef, { 
       plan: adminEditModal.plan, 
       daysRemaining: parsedDays,
@@ -633,14 +621,12 @@ function DashboardApp({ userProfile }) {
     }, { income: 0, expense: 0 });
     const balance = totals.income - totals.expense;
     
-    // Calcula Formas de Pagamento (Entradas)
     const incomeTransactions = filteredTransactions.filter(t => t.type === 'income');
     const incomePaymentData = incomeTransactions.reduce((acc, tx) => { 
         acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; 
     }, {});
     const sortedIncomePayments = Object.entries(incomePaymentData).sort((a, b) => b[1] - a[1]);
 
-    // Calcula Formas de Pagamento (Saídas)
     const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
     const expensePaymentData = expenseTransactions.reduce((acc, tx) => { 
         acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; 
@@ -1261,15 +1247,14 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Força a limpeza de cache local antes de ler o Firebase para destrancar a tela antiga
-    localStorage.clear();
-    sessionStorage.clear();
+    let unsubProfile = null;
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
       if (user) {
         const docRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-        const unsubProfile = onSnapshot(docRef, (docSnap) => {
+        
+        unsubProfile = onSnapshot(docRef, (docSnap) => {
            if(docSnap.exists()) {
               const userData = docSnap.data();
               const today = new Date().toISOString().split('T')[0];
@@ -1313,20 +1298,31 @@ export default function App() {
                   plan: isOwner ? 'Admin' : 'Free', 
                   daysRemaining: isOwner ? 999 : 30, 
                   status: 'Ativo', 
-                  createdAt: new Date().toISOString() 
+                  createdAt: new Date().toISOString(),
+                  lastDecrementDate: new Date().toISOString().split('T')[0]
               };
               setDoc(docRef, basicProfile);
               setUserProfile({ uid: user.uid, ...basicProfile });
            }
            setLoading(false);
+        }, (error) => {
+           console.error("Erro no Firebase:", error);
+           setLoading(false);
         });
-        return () => unsubProfile();
       } else {
         setUserProfile(null);
         setLoading(false);
+        if (unsubProfile) {
+          unsubProfile();
+          unsubProfile = null;
+        }
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
   if (loading) {
