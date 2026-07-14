@@ -136,6 +136,7 @@ const Auth = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setMessage({ type: '', text: '' });
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, formData.email, formData.password);
@@ -163,8 +164,9 @@ const Auth = () => {
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') erroMsg = "E-mail ou senha incorretos.";
       if (error.code === 'auth/weak-password') erroMsg = "A senha deve ter pelo menos 6 caracteres.";
       showMsg(erroMsg, 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleForgotPassword = async () => {
@@ -246,9 +248,9 @@ function DashboardApp({ userProfile }) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Estados dos Dados que virão do Firebase
+  // Estados dos Dados
   const [transactions, setTransactions] = useState([]);
-  const [bills, setBills] = useState([]); // Contas a Pagar/Receber
+  const [bills, setBills] = useState([]);
   const [incomeCategories, setIncomeCategories] = useState(['Outros']);
   const [expenseCategories, setExpenseCategories] = useState(['Outros']);
   const [adminUsers, setAdminUsers] = useState([]);
@@ -272,17 +274,17 @@ function DashboardApp({ userProfile }) {
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
 
-  // Modal para Contas a Pagar (Agendamentos)
+  // Modal para Contas a Pagar
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1 });
   
-  // Modal para dar Baixa na Conta
+  // Modal para dar Baixa
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
-  // ORDENAÇÃO DAS CATEGORIAS ("Outros" sempre no topo, restante alfabético)
+  // ORDENAÇÃO DAS CATEGORIAS
   const sortCategories = (cats) => {
     return [...cats].sort((a, b) => {
       if (a.toLowerCase() === 'outros') return -1;
@@ -1179,7 +1181,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* NOVO: Modal de Edição do Admin (Planos e Dias) */}
+      {/* Modal de Edição do Admin (Planos e Dias) */}
       {adminEditModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
@@ -1191,10 +1193,8 @@ function DashboardApp({ userProfile }) {
                      <p className="text-sm font-bold text-slate-700 mb-1">Cliente: <span className="font-medium text-slate-600">{adminEditModal.user?.name}</span></p>
                      <p className="text-sm font-bold text-slate-700">E-mail: <span className="font-medium text-slate-600">{adminEditModal.user?.email}</span></p>
                    </div>
-                   {/* Botão de Renovação Rápida */}
                    <button type="button" onClick={() => {
                       const currentDays = parseInt(adminEditModal.daysRemaining) || 0;
-                      // Se o cara atrasou (chegou a 0), reseta pra 30. Se adiantou o pagamento, soma os 30 aos dias que ele já tinha.
                       const newDays = currentDays <= 0 ? 30 : currentDays + 30;
                       setAdminEditModal({...adminEditModal, daysRemaining: newDays});
                    }} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
@@ -1245,6 +1245,14 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [globalError, setGlobalError] = useState('');
+  const [isTakingLong, setIsTakingLong] = useState(false);
+
+  // Gatilho para aviso de lentidão / Domínio não autorizado
+  useEffect(() => {
+    const timer = setTimeout(() => setIsTakingLong(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let unsubProfile = null;
@@ -1261,7 +1269,7 @@ export default function App() {
               let updates = {};
               let needsUpdate = false;
 
-              // BLINDAGEM MÁXIMA DE ADMIN: Força a atualização se o e-mail for o seu original
+              // BLINDAGEM MÁXIMA DE ADMIN
               if (user.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
                   updates.plan = 'Admin';
                   updates.daysRemaining = 999;
@@ -1290,7 +1298,7 @@ export default function App() {
                   setUserProfile({ uid: user.uid, ...userData });
               }
            } else {
-              // SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O SEU E-MAIL
+              // SE A CONTA NÃO EXISTIR, CRIA (Admin se for o email oficial)
               const isOwner = user.email === ADMIN_EMAIL;
               const basicProfile = { 
                   name: isOwner ? 'Paulo Sérgio Diniz' : 'Utilizador', 
@@ -1305,8 +1313,14 @@ export default function App() {
               setUserProfile({ uid: user.uid, ...basicProfile });
            }
            setLoading(false);
+           setGlobalError('');
         }, (error) => {
            console.error("Erro no Firebase:", error);
+           if (error.code === 'permission-denied') {
+              setGlobalError("Acesso Negado. O Firebase está bloqueando a leitura dos seus dados. Vá no painel do Firebase > Firestore Database > Regras (Rules) e libere o acesso.");
+           } else {
+              setGlobalError("Erro de conexão com o banco de dados: " + error.message);
+           }
            setLoading(false);
         });
       } else {
@@ -1325,12 +1339,68 @@ export default function App() {
     };
   }, []);
 
+  // TELA DE ERRO GLOBAL DE BANCO DE DADOS (DEDO-DURO)
+  if (globalError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg text-center border border-red-100">
+          <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl">error</span>
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Erro de Configuração</h2>
+          <p className="text-slate-600 mb-6">{globalError}</p>
+          <div className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl text-left">
+             <b className="text-slate-700">Como resolver no Firebase:</b><br/>
+             <ol className="list-decimal pl-4 mt-2 space-y-2">
+                <li>Abra o Console do Firebase e vá em <b>Firestore Database</b>.</li>
+                <li>Clique na aba <b>Regras (Rules)</b>.</li>
+                <li>Apague o que está lá e cole este código temporário:</li>
+             </ol>
+             <code className="block bg-slate-800 text-emerald-400 p-3 rounded-lg mt-3 text-xs overflow-x-auto">
+               rules_version = '2';<br/>
+               service cloud.firestore &#123;<br/>
+               &nbsp;&nbsp;match /databases/&#123;database&#125;/documents &#123;<br/>
+               &nbsp;&nbsp;&nbsp;&nbsp;match /&#123;document=**&#125; &#123;<br/>
+               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if true;<br/>
+               &nbsp;&nbsp;&nbsp;&nbsp;&#125;<br/>
+               &nbsp;&nbsp;&#125;<br/>
+               &#125;
+             </code>
+          </div>
+          <button onClick={() => window.location.reload()} className="mt-6 w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-colors shadow-sm">
+            Tentar Novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // TELA DE CARREGAMENTO INTELIGENTE (AVISA SOBRE DOMÍNIO BLOQUEADO)
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-emerald-600 font-bold text-xl animate-pulse flex items-center gap-2">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="text-emerald-600 font-bold text-xl animate-pulse flex items-center gap-2 mb-4">
            <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div> A carregar...
         </div>
+        
+        {isTakingLong && (
+          <div className="mt-4 text-sm text-slate-600 max-w-sm bg-white p-5 rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4">
+             <p className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-500">warning</span>
+                Demorando muito?
+             </p>
+             <p className="mb-3">Se a tela não sair daqui, o Google Firebase está bloqueando seu domínio personalizado.</p>
+             <p className="font-bold text-slate-700">Como resolver agora:</p>
+             <ol className="list-decimal pl-4 mt-1 space-y-1">
+                <li>Abra o Console do Firebase.</li>
+                <li>Vá em <b>Authentication &gt; Settings &gt; Authorized domains</b>.</li>
+                <li>Clique em "Add domain" e cole: <br/><b className="bg-slate-100 px-1 py-0.5 rounded text-emerald-600">{window.location.hostname}</b></li>
+             </ol>
+             <button onClick={() => window.location.reload()} className="mt-4 w-full bg-slate-100 text-slate-700 font-bold py-2 rounded-lg hover:bg-slate-200">
+               Recarregar Página
+             </button>
+          </div>
+        )}
       </div>
     );
   }
