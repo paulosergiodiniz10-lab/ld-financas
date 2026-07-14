@@ -147,7 +147,7 @@ const Auth = () => {
         const createdAt = new Date().toISOString();
         
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), {
-          name: formData.name || 'Novo Usuário',
+          name: formData.name || 'Novo Utilizador',
           whatsapp: formData.whatsapp,
           email: formData.email,
           plan: formData.email === ADMIN_EMAIL ? 'Admin' : 'Free',
@@ -201,15 +201,15 @@ const Auth = () => {
         <form onSubmit={handleSubmit}>
            {!isLogin && (
              <div className="animate-in slide-in-from-top-2 duration-300">
-               <Input label="Seu Nome Completo" name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: João Silva" required={!isLogin} />
-               <Input label="WhatsApp (com DDD)" name="whatsapp" type="tel" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="Ex: 64999999999" required={!isLogin} />
+               <Input label="O seu Nome Completo" name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: João Silva" required={!isLogin} />
+               <Input label="WhatsApp (com código de país)" name="whatsapp" type="tel" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="Ex: 351999999999" required={!isLogin} />
              </div>
            )}
            
-           <Input label="Seu E-mail" type="email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="exemplo@email.com" required />
+           <Input label="O seu E-mail" type="email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="exemplo@email.com" required />
            
            <Input 
-             label="Sua Senha" type={showPassword ? 'text' : 'password'} name="password" 
+             label="A sua Senha" type={showPassword ? 'text' : 'password'} name="password" 
              value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
              placeholder="••••••••" required 
              rightElement={
@@ -226,7 +226,7 @@ const Auth = () => {
            )}
 
            <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm mt-4 active:scale-[0.98]">
-             {loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Cadastrar')}
+             {loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Registar')}
            </button>
         </form>
 
@@ -250,13 +250,14 @@ function DashboardApp({ userProfile }) {
 
   // Estados dos Dados
   const [transactions, setTransactions] = useState([]);
-  const [bills, setBills] = useState([]);
+  const [bills, setBills] = useState([]); // Contas a Pagar/Receber
   const [incomeCategories, setIncomeCategories] = useState(['Outros']);
   const [expenseCategories, setExpenseCategories] = useState(['Outros']);
   const [adminUsers, setAdminUsers] = useState([]);
 
   // Filtros Globais
   const [filterPeriod, setFilterPeriod] = useState('month'); 
+  const [filterType, setFilterType] = useState('all'); // NOVO FILTRO DE TIPO
   const [filterCategory, setFilterCategory] = useState('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
@@ -325,7 +326,7 @@ function DashboardApp({ userProfile }) {
     return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
 
-  const handleLogout = () => openConfirm('Sair do Sistema', 'Tem certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
+  const handleLogout = () => openConfirm('Sair do Sistema', 'Tem a certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
   // ===================== LANÇAMENTOS DIÁRIOS =====================
   const handleOpenModal = (transaction = null) => {
@@ -361,7 +362,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const requestDeleteTransaction = (id) => {
-    openConfirm('Excluir Lançamento', 'Tem certeza que deseja excluir? Isso afetará o seu saldo.', async () => {
+    openConfirm('Excluir Lançamento', 'Tem a certeza que deseja excluir? Isto afetará o seu saldo.', async () => {
         const txToDelete = transactions.find(t => t.id === id);
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
         if (txToDelete && txToDelete.originBillId) {
@@ -377,7 +378,7 @@ function DashboardApp({ userProfile }) {
     if (userProfile.plan === 'Básico') {
       openConfirm(
         'Plano Pro Necessário', 
-        'A criação de novos agendamentos é exclusiva do Plano Pro. Assine agora para continuar prevendo o seu futuro financeiro!', 
+        'A criação de novos agendamentos é exclusiva do Plano Pro. Assine agora para continuar a prever o seu futuro financeiro!', 
         () => {
            setCurrentView('plans');
            closeConfirm();
@@ -475,7 +476,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const requestDeleteCategory = (catName, type) => {
-    openConfirm('Excluir Categoria', `Tem certeza que deseja excluir "${catName}"?`, async () => {
+    openConfirm('Excluir Categoria', `Tem a certeza que deseja excluir "${catName}"?`, async () => {
         let updatedIncomes = [...incomeCategories]; let updatedExpenses = [...expenseCategories];
         if (type === 'income') updatedIncomes = updatedIncomes.filter(c => c !== catName);
         else updatedExpenses = updatedExpenses.filter(c => c !== catName);
@@ -556,14 +557,16 @@ function DashboardApp({ userProfile }) {
 
   const filteredTransactions = useMemo(() => {
     let filtered = filterDataByPeriod(transactions, 'date');
+    if (filterType !== 'all') filtered = filtered.filter(tx => tx.type === filterType);
     if (filterCategory !== 'all') filtered = filtered.filter(tx => tx.category === filterCategory);
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
-  }, [transactions, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterCategory]);
+  }, [transactions, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterType, filterCategory]);
 
   const filteredBills = useMemo(() => {
     let filtered = filterDataByPeriod(bills, 'dueDate');
+    if (filterType !== 'all') filtered = filtered.filter(b => b.type === filterType);
     return filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()); 
-  }, [bills, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear]);
+  }, [bills, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterType]);
 
   const usedCategoriesInPeriod = useMemo(() => sortCategories(Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean)), [filteredTransactions]);
 
@@ -586,6 +589,17 @@ function DashboardApp({ userProfile }) {
           </button>
         ))}
       </div>
+      
+      {(currentView === 'dashboard' || currentView === 'transactions' || currentView === 'bills') && (
+        <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[160px]">
+          <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setFilterCategory('all'); }} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-2">
+            <option value="all">Todos os Tipos</option>
+            <option value="income">Entradas (+)</option>
+            <option value="expense">Saídas (-)</option>
+          </select>
+        </div>
+      )}
+
       {(currentView === 'dashboard' || currentView === 'transactions') && (
         <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[200px]">
           <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-2">
@@ -869,7 +883,7 @@ function DashboardApp({ userProfile }) {
           <div className="w-full md:w-auto"><p className="text-slate-600 mb-4 font-medium md:max-w-[300px]">Precisa de ajuda para usar o sistema, relatar um problema ou reativar o seu plano? Clique no botão para chamar a nossa equipa técnica.</p><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
         </div>
       </Card>
-      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> e clique em <b>"Assinar via WhatsApp"</b>. Você será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode acessar de qualquer celular ou computador.</p></Card></div></div>
+      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> e clique em <b>"Assinar via WhatsApp"</b>. Você será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode aceder de qualquer telemóvel ou computador.</p></Card></div></div>
     </div>
   );
 
@@ -887,15 +901,15 @@ function DashboardApp({ userProfile }) {
            className="w-full h-auto aspect-video object-cover"
          >
            <source src="https://ldsite.com.br/wp-content/uploads/2026/06/LD-FINANCAS-1.mp4" type="video/mp4" />
-           Seu navegador não suporta a visualização do vídeo.
+           O seu navegador não suporta a visualização do vídeo.
          </video>
       </div>
 
       <div className="space-y-4 mt-8">
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Acesse a aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Aluguel) e receitas (Serviço, Venda).</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Registre os valores que <b>já entraram ou saíram</b> de fato do seu bolso ou banco hoje.</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende seus boletos e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo do Painel Principal para ver o Mês. Em Lançamentos, clique em "Excel" para baixar e enviar para o contador.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Aceda à aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Renda) e receitas (Serviço, Venda).</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá a "Lançamentos" &gt; "Novo Lançamento". Registe os valores que <b>já entraram ou saíram</b> de facto do seu bolso ou banco hoje.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende as suas faturas e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo do Painel Principal para ver o Mês. Em Lançamentos, clique em "Excel" para descarregar e enviar para o contabilista.</p></div></Card>
       </div>
     </div>
   );
@@ -922,7 +936,7 @@ function DashboardApp({ userProfile }) {
             <div className="text-center py-8">
                <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div>
                <h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4>
-               <p className="text-slate-600">Você tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
+               <p className="text-slate-600">Tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
             </div>
           </Card>
         </div>
@@ -931,7 +945,7 @@ function DashboardApp({ userProfile }) {
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
+        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
         <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
           <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
               <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
@@ -1072,7 +1086,7 @@ function DashboardApp({ userProfile }) {
                <p className="text-slate-600 mb-8 max-w-md mx-auto">A sua conta foi suspensa pelo Administrador do sistema. Por favor, entre em contato com o suporte para obter mais detalhes.</p>
              )}
              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, minha conta está bloqueada no LD Finanças e preciso de ajuda para renovar.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
+                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, a minha conta está bloqueada no LD Finanças e preciso de ajuda para renovar.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
                 <Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair da Conta</Button>
              </div>
           </div>
@@ -1389,11 +1403,11 @@ export default function App() {
                 <span className="material-symbols-outlined text-amber-500">warning</span>
                 Demorando muito?
              </p>
-             <p className="mb-3">Se a tela não sair daqui, o Google Firebase está bloqueando seu domínio personalizado.</p>
+             <p className="mb-3">Se a tela não sair daqui, o Google Firebase está bloqueando o seu domínio personalizado.</p>
              <p className="font-bold text-slate-700">Como resolver agora:</p>
              <ol className="list-decimal pl-4 mt-1 space-y-1">
                 <li>Abra o Console do Firebase.</li>
-                <li>Vá em <b>Authentication &gt; Settings &gt; Authorized domains</b>.</li>
+                <li>Vá a <b>Authentication &gt; Settings &gt; Authorized domains</b>.</li>
                 <li>Clique em "Add domain" e cole: <br/><b className="bg-slate-100 px-1 py-0.5 rounded text-emerald-600">{window.location.hostname}</b></li>
              </ol>
              <button onClick={() => window.location.reload()} className="mt-4 w-full bg-slate-100 text-slate-700 font-bold py-2 rounded-lg hover:bg-slate-200">
