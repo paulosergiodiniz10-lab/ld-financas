@@ -56,7 +56,6 @@ const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 
 // --- CONFIGURAÇÕES DO SISTEMA ---
-// MUDAMOS DE VOLTA PARA O SEU E-MAIL ORIGINAL QUE TEM OS DADOS!
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
@@ -1261,10 +1260,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Força a limpeza de cache local antes de ler o Firebase para destrancar a tela antiga
-    localStorage.clear();
-    sessionStorage.clear();
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
       if (user) {
@@ -1276,15 +1271,8 @@ export default function App() {
               let updates = {};
               let needsUpdate = false;
 
-              // BLINDAGEM MÁXIMA DE ADMIN: Força a atualização se o e-mail for o seu original
-              if (user.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
-                  updates.plan = 'Admin';
-                  updates.daysRemaining = 999;
-                  needsUpdate = true;
-              }
-
               // Robô de Desconto Automático de Dias
-              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
+              if (userData.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
                   const lastCheck = userData.lastDecrementDate || userData.createdAt?.split('T')[0] || today;
                   if (lastCheck !== today) {
                       const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
@@ -1305,16 +1293,7 @@ export default function App() {
                   setUserProfile({ uid: user.uid, ...userData });
               }
            } else {
-              // SE A CONTA NÃO EXISTIR, CRIA COMO ADMIN SE FOR O SEU E-MAIL
-              const isOwner = user.email === ADMIN_EMAIL;
-              const basicProfile = { 
-                  name: isOwner ? 'Paulo Sérgio Diniz' : 'Utilizador', 
-                  email: user.email, 
-                  plan: isOwner ? 'Admin' : 'Free', 
-                  daysRemaining: isOwner ? 999 : 30, 
-                  status: 'Ativo', 
-                  createdAt: new Date().toISOString() 
-              };
+              const basicProfile = { name: 'Utilizador', email: user.email, plan: 'Free', daysRemaining: 30, status: 'Ativo', createdAt: new Date().toISOString() };
               setDoc(docRef, basicProfile);
               setUserProfile({ uid: user.uid, ...basicProfile });
            }
