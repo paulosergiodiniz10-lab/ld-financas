@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- FORÇAR O NAVEGADOR A NÃO USAR CACHE VELHO -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    
     <title>LD Finanças</title>
     
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -34,13 +40,25 @@
   </head>
   <body class="bg-slate-50 text-slate-900 font-sans">
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
     
-    <!-- Ativar o PWA -->
+    <!-- O "?v=4" engana o cache e força o navegador a baixar o sistema novo -->
+    <script type="module" src="/src/main.jsx?v=4"></script>
+    
+    <!-- SUPER DESTRUIDOR DE CACHE PWA (Limpa a memória à força) -->
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
+        // 1. Desativa todos os Service Workers antigos
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+        
+        // 2. Apaga todo o cache guardado pela aplicação
+        caches.keys().then(function(names) {
+            for (let name of names) {
+                caches.delete(name);
+            }
         });
       }
     </script>
@@ -52,20 +70,15 @@
 
       // Desativa os atalhos de teclado comuns de desenvolvedores
       document.onkeydown = function(e) {
-        // F12
-        if(e.keyCode == 123) { return false; }
-        // Ctrl+Shift+I (Windows/Linux) ou Cmd+Option+I (Mac)
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
-        if(e.metaKey && e.altKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
-        // Ctrl+Shift+C (Inspecionar Elemento)
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
-        if(e.metaKey && e.altKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
-        // Ctrl+Shift+J (Console)
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
-        if(e.metaKey && e.altKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
-        // Ctrl+U (Ver Código Fonte)
-        if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
-        if(e.metaKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
+        if(e.keyCode == 123) { return false; } // F12
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; } // Ctrl+Shift+I
+        if(e.metaKey && e.altKey && e.keyCode == 'I'.charCodeAt(0)) { return false; } // Cmd+Option+I no Mac
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; } // Ctrl+Shift+C
+        if(e.metaKey && e.altKey && e.keyCode == 'C'.charCodeAt(0)) { return false; } // Cmd+Option+C no Mac
+        if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; } // Ctrl+Shift+J
+        if(e.metaKey && e.altKey && e.keyCode == 'J'.charCodeAt(0)) { return false; } // Cmd+Option+J no Mac
+        if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; } // Ctrl+U
+        if(e.metaKey && e.keyCode == 'U'.charCodeAt(0)) { return false; } // Cmd+U no Mac
       }
     </script>
   </body>
