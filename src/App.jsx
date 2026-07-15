@@ -778,7 +778,10 @@ function DashboardApp({ userProfile }) {
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2></header>
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2>
+          <Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar DRE (Excel)</Button>
+        </header>
         {renderFilterBar()}
         {renderFilterExtras()}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -852,7 +855,7 @@ function DashboardApp({ userProfile }) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Lançamentos</h2><p className="text-slate-500 text-sm mt-1">O seu caixa real diário.</p></div>
-        <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="bg-white" icon={Download}>Excel</Button><Button onClick={() => handleOpenModal()} icon={Plus}>Novo Lançamento</Button></div>
+        <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar DRE (Excel)</Button><Button onClick={() => handleOpenModal()} icon={Plus}>Novo Lançamento</Button></div>
       </header>
       {renderFilterBar()}
       {renderFilterExtras()}
@@ -945,7 +948,7 @@ function DashboardApp({ userProfile }) {
                    </div>
                  </div>
                  <div className="flex items-center gap-4 opacity-70 group-hover:opacity-100 transition-opacity">
-                    <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.paidAmount)}` : `-R$ ${formatNumber(bill.paidAmount)}`}</div>
+                    <div className={`font-bold text-lg ${bill.type === 'income' ? 'textemerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.paidAmount)}` : `-R$ ${formatNumber(bill.paidAmount)}`}</div>
                     <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Excluir Histórico"><Trash2 size={18}/></button>
                  </div>
                </div>
