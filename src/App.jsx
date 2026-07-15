@@ -1106,12 +1106,9 @@ function DashboardApp({ userProfile }) {
                   
                   {/* EDITAR AQUI O NOME E DESCRIÇÃO DO BÁSICO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
-                  <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
+                  <p className="text-slate-500 text-sm mb-6 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
                   
-                  {/* EDITAR AQUI O VALOR DO BÁSICO */}
-                  <p className="text-2xl font-black text-slate-800 mb-6">R$ 9,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  
-                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
+                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber o valor do Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
 
                 {/* --- CAIXINHA DO PLANO PRO --- */}
@@ -1121,12 +1118,9 @@ function DashboardApp({ userProfile }) {
                   
                   {/* EDITAR AQUI O NOME E DESCRIÇÃO DO PRO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
-                  <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
+                  <p className="text-slate-500 text-sm mb-6 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
                   
-                  {/* EDITAR AQUI O VALOR DO PRO */}
-                  <p className="text-2xl font-black text-emerald-600 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  
-                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
+                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber o valor do Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
 
               </div>
@@ -1382,8 +1376,8 @@ function DashboardApp({ userProfile }) {
                    onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} 
                    options={[
                      { value: 'Free', label: 'Free' },
-                     { value: 'Básico', label: 'Básico (R$ 9,90/mês)' },
-                     { value: 'Pro', label: 'Pro (R$ 19,90/mês)' },
+                     { value: 'Básico', label: 'Básico' },
+                     { value: 'Pro', label: 'Pro' },
                      { value: 'Admin', label: 'Admin (Vitalício)' }
                    ]} 
                    required 
