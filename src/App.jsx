@@ -332,7 +332,6 @@ function DashboardApp({ userProfile }) {
                     let needsDbUpdate = false;
                     let updates = {};
 
-                    // Subtrai os dias que passaram desde a última vez que os dias foram subtraídos
                     if (u.daysRemaining > 0 && lastCheck !== today) {
                         const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
                         if (daysPassed > 0) {
@@ -344,14 +343,12 @@ function DashboardApp({ userProfile }) {
                         }
                     }
                     
-                    // Bloqueia a conta instantaneamente se os dias chegaram a zero
                     if (u.daysRemaining <= 0 && u.status !== 'Bloqueado') {
                         u.status = 'Bloqueado';
                         updates.status = 'Bloqueado';
                         needsDbUpdate = true;
                     }
 
-                    // Se houve alteração, grava silenciosamente no Firebase para ficar sempre atualizado
                     if (needsDbUpdate) {
                         setDoc(doc(db, 'artifacts', APP_ID, 'users', u.uid), updates, { merge: true });
                     }
@@ -760,7 +757,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const renderFilterBar = () => (
-    <div className="flex flex-col lg:flex-row gap-4 mb-6">
+    <div className="flex flex-col md:flex-row gap-4 mb-6">
       <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap gap-2 shadow-sm flex-1">
         {['all', 'today', '15days', 'month', 'specific_month', 'custom'].map(period => (
           <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -1141,7 +1138,6 @@ function DashboardApp({ userProfile }) {
                 <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
                   
-                  {/* EDITAR AQUI O NOME E DESCRIÇÃO DO BÁSICO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
                   <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
                   
@@ -1153,7 +1149,6 @@ function DashboardApp({ userProfile }) {
                   {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
                   <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
                   
-                  {/* EDITAR AQUI O NOME E DESCRIÇÃO DO PRO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
                   <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
                   
@@ -1482,21 +1477,17 @@ export default function App() {
               }
 
               // Robô de Desconto Automático de Dias
-              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin') {
+              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
                   const lastCheck = userData.lastDecrementDate || userData.createdAt?.split('T')[0] || today;
-                  
-                  if (userData.daysRemaining > 0 && lastCheck !== today) {
+                  if (lastCheck !== today) {
                       const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
                       if (daysPassed > 0) {
                           const newDays = Math.max(0, userData.daysRemaining - daysPassed);
                           updates.daysRemaining = newDays;
                           updates.lastDecrementDate = today;
-                          if (newDays <= 0) updates.status = 'Bloqueado';
+                          if (newDays === 0) updates.status = 'Bloqueado';
                           needsUpdate = true;
                       }
-                  } else if (userData.daysRemaining <= 0 && userData.status !== 'Bloqueado') {
-                      updates.status = 'Bloqueado';
-                      needsUpdate = true;
                   }
               }
 
