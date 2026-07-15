@@ -247,6 +247,7 @@ const Auth = () => {
 function DashboardApp({ userProfile }) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showUrgentAlert, setShowUrgentAlert] = useState(false); // NOVO: Estado para o alerta pop-up
 
   // Estados dos Dados
   const [transactions, setTransactions] = useState([]);
@@ -325,6 +326,20 @@ function DashboardApp({ userProfile }) {
 
     return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
+
+  // NOVO: LÓGICA DO ALERTA E BADGE VERMELHO
+  const todayStr = new Date().toISOString().split('T')[0];
+  const urgentBillsCount = useMemo(() => {
+    return bills.filter(b => b.status === 'pending' && b.dueDate <= todayStr).length;
+  }, [bills, todayStr]);
+
+  useEffect(() => {
+    // Só mostra o alerta se houver contas urgentes e se ainda não o mostramos nesta sessão
+    if (urgentBillsCount > 0 && !sessionStorage.getItem(`urgentAlertShown_${userProfile.uid}`)) {
+      setShowUrgentAlert(true);
+      sessionStorage.setItem(`urgentAlertShown_${userProfile.uid}`, 'true');
+    }
+  }, [urgentBillsCount, userProfile.uid]);
 
   const handleLogout = () => openConfirm('Sair do Sistema', 'Tem a certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
@@ -1167,11 +1182,12 @@ function DashboardApp({ userProfile }) {
     </div>
   );
 
-  const NavItem = ({ id, icon: Icon, label }) => {
+  const NavItem = ({ id, icon: Icon, label, badge }) => {
     const isActive = currentView === id;
     return (
       <button onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>
         <Icon size={20} className={isActive ? 'text-emerald-600' : 'text-slate-400'} />{label}
+        {badge > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{badge}</span>}
       </button>
     );
   };
@@ -1187,7 +1203,7 @@ function DashboardApp({ userProfile }) {
           
           {/* Liberação da aba para Free (Test-drive), Pro e Admin. Básico fica sem acesso. */}
           {(userProfile.plan === 'Free' || userProfile.plan === 'Básico' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
-             <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" />
+             <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" badge={urgentBillsCount} />
           )}
           
           <NavItem id="categories" icon={Tag} label="Categorias" />
@@ -1226,6 +1242,20 @@ function DashboardApp({ userProfile }) {
           </>
         )}
       </main>
+
+      {/* Modal de Alerta Urgente (Contas a Vencer/Atrasadas) */}
+      {showUrgentAlert && (
+         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowUrgentAlert(false)}></div>
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6 text-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100 text-red-500"><AlertTriangle size={32} /></div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Contas Pendentes!</h3>
+              <p className="text-slate-600 mb-6">Você tem <b>{urgentBillsCount}</b> conta(s) a vencer hoje ou atrasada(s). Não se esqueça de dar a baixa!</p>
+              <Button onClick={() => { setShowUrgentAlert(false); setCurrentView('bills'); }} className="w-full">Ver Contas Agora</Button>
+              <button onClick={() => setShowUrgentAlert(false)} className="mt-4 text-sm font-bold text-slate-500 hover:text-slate-700">Lembrar mais tarde</button>
+            </div>
+         </div>
+      )}
 
       {/* Modal de Transação */}
       {isModalOpen && (
