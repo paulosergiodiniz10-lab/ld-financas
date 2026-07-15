@@ -247,18 +247,18 @@ const Auth = () => {
 function DashboardApp({ userProfile }) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showUrgentAlert, setShowUrgentAlert] = useState(false); // NOVO: Estado para o alerta pop-up
+  const [showUrgentAlert, setShowUrgentAlert] = useState(false);
 
   // Estados dos Dados
   const [transactions, setTransactions] = useState([]);
-  const [bills, setBills] = useState([]); // Contas a Pagar/Receber
+  const [bills, setBills] = useState([]); 
   const [incomeCategories, setIncomeCategories] = useState(['Outros']);
   const [expenseCategories, setExpenseCategories] = useState(['Outros']);
   const [adminUsers, setAdminUsers] = useState([]);
 
   // Filtros Globais
   const [filterPeriod, setFilterPeriod] = useState('month'); 
-  const [filterType, setFilterType] = useState('all'); // NOVO FILTRO DE TIPO
+  const [filterType, setFilterType] = useState('all'); 
   const [filterCategory, setFilterCategory] = useState('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
@@ -286,7 +286,6 @@ function DashboardApp({ userProfile }) {
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
 
-  // ORDENAÇÃO DAS CATEGORIAS
   const sortCategories = (cats) => {
     return [...cats].sort((a, b) => {
       if (a.toLowerCase() === 'outros') return -1;
@@ -297,7 +296,7 @@ function DashboardApp({ userProfile }) {
   const sortedIncomeCats = sortCategories(incomeCategories);
   const sortedExpenseCats = sortCategories(expenseCategories);
 
-  // BUSCA DADOS DO FIREBASE EM TEMPO REAL
+  // BUSCA DADOS DO FIREBASE EM TEMPO REAL E SINCRONIZA ADMIN
   useEffect(() => {
     if (!userProfile?.uid) return;
 
@@ -321,20 +320,58 @@ function DashboardApp({ userProfile }) {
     let unsubUsers = () => {};
     if (userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
-        unsubUsers = onSnapshot(usersRef, (snapshot) => { setAdminUsers(snapshot.docs.map(d => ({ uid: d.id, ...d.data() }))); });
+        unsubUsers = onSnapshot(usersRef, (snapshot) => { 
+            const today = new Date().toISOString().split('T')[0];
+            
+            // O Robô do Admin: Verifica cada cliente e atualiza quem não entra há algum tempo
+            const fetchedUsers = snapshot.docs.map(d => {
+                let u = { uid: d.id, ...d.data() };
+                
+                if (u.email !== ADMIN_EMAIL && u.plan !== 'Admin') {
+                    const lastCheck = u.lastDecrementDate || u.createdAt?.split('T')[0] || today;
+                    let needsDbUpdate = false;
+                    let updates = {};
+
+                    // Subtrai os dias que passaram desde a última vez que os dias foram subtraídos
+                    if (u.daysRemaining > 0 && lastCheck !== today) {
+                        const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
+                        if (daysPassed > 0) {
+                            u.daysRemaining = Math.max(0, u.daysRemaining - daysPassed);
+                            u.lastDecrementDate = today;
+                            updates.daysRemaining = u.daysRemaining;
+                            updates.lastDecrementDate = today;
+                            needsDbUpdate = true;
+                        }
+                    }
+                    
+                    // Bloqueia a conta instantaneamente se os dias chegaram a zero
+                    if (u.daysRemaining <= 0 && u.status !== 'Bloqueado') {
+                        u.status = 'Bloqueado';
+                        updates.status = 'Bloqueado';
+                        needsDbUpdate = true;
+                    }
+
+                    // Se houve alteração, grava silenciosamente no Firebase para ficar sempre atualizado
+                    if (needsDbUpdate) {
+                        setDoc(doc(db, 'artifacts', APP_ID, 'users', u.uid), updates, { merge: true });
+                    }
+                }
+                return u;
+            });
+            
+            setAdminUsers(fetchedUsers); 
+        });
     }
 
     return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
 
-  // NOVO: LÓGICA DO ALERTA E BADGE VERMELHO
   const todayStr = new Date().toISOString().split('T')[0];
   const urgentBillsCount = useMemo(() => {
     return bills.filter(b => b.status === 'pending' && b.dueDate <= todayStr).length;
   }, [bills, todayStr]);
 
   useEffect(() => {
-    // Só mostra o alerta se houver contas urgentes e se ainda não o mostramos nesta sessão
     if (urgentBillsCount > 0 && !sessionStorage.getItem(`urgentAlertShown_${userProfile.uid}`)) {
       setShowUrgentAlert(true);
       sessionStorage.setItem(`urgentAlertShown_${userProfile.uid}`, 'true');
@@ -723,7 +760,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const renderFilterBar = () => (
-    <div className="flex flex-col md:flex-row gap-4 mb-6">
+    <div className="flex flex-col lg:flex-row gap-4 mb-6">
       <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap gap-2 shadow-sm flex-1">
         {['all', 'today', '15days', 'month', 'specific_month', 'custom'].map(period => (
           <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -963,7 +1000,7 @@ function DashboardApp({ userProfile }) {
                    </div>
                  </div>
                  <div className="flex items-center gap-4 opacity-70 group-hover:opacity-100 transition-opacity">
-                    <div className={`font-bold text-lg ${bill.type === 'income' ? 'textemerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.paidAmount)}` : `-R$ ${formatNumber(bill.paidAmount)}`}</div>
+                    <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.paidAmount)}` : `-R$ ${formatNumber(bill.paidAmount)}`}</div>
                     <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Excluir Histórico"><Trash2 size={18}/></button>
                  </div>
                </div>
@@ -1106,9 +1143,9 @@ function DashboardApp({ userProfile }) {
                   
                   {/* EDITAR AQUI O NOME E DESCRIÇÃO DO BÁSICO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
-                  <p className="text-slate-500 text-sm mb-6 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
+                  <p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p>
                   
-                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber o valor do Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
+                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
 
                 {/* --- CAIXINHA DO PLANO PRO --- */}
@@ -1118,9 +1155,9 @@ function DashboardApp({ userProfile }) {
                   
                   {/* EDITAR AQUI O NOME E DESCRIÇÃO DO PRO */}
                   <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
-                  <p className="text-slate-500 text-sm mb-6 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
+                  <p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Gestão de Contas a Pagar e Receber</b>.</p>
                   
-                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber o valor do Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
+                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
 
               </div>
@@ -1445,17 +1482,21 @@ export default function App() {
               }
 
               // Robô de Desconto Automático de Dias
-              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
+              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin') {
                   const lastCheck = userData.lastDecrementDate || userData.createdAt?.split('T')[0] || today;
-                  if (lastCheck !== today) {
+                  
+                  if (userData.daysRemaining > 0 && lastCheck !== today) {
                       const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
                       if (daysPassed > 0) {
                           const newDays = Math.max(0, userData.daysRemaining - daysPassed);
                           updates.daysRemaining = newDays;
                           updates.lastDecrementDate = today;
-                          if (newDays === 0) updates.status = 'Bloqueado';
+                          if (newDays <= 0) updates.status = 'Bloqueado';
                           needsUpdate = true;
                       }
+                  } else if (userData.daysRemaining <= 0 && userData.status !== 'Bloqueado') {
+                      updates.status = 'Bloqueado';
+                      needsUpdate = true;
                   }
               }
 
