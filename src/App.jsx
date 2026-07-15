@@ -570,14 +570,141 @@ function DashboardApp({ userProfile }) {
 
   const usedCategoriesInPeriod = useMemo(() => sortCategories(Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean)), [filteredTransactions]);
 
+  // NOVO GERADOR DE EXCEL PROFISSIONAL (DRE)
   const handleExportCSV = () => {
-    if (filteredTransactions.length === 0) return; 
-    const headers = ['Data', 'Tipo', 'Descrição (Categoria)', 'Forma de Pagamento', 'Valor'];
-    const rows = filteredTransactions.map(tx => [formatDate(tx.date), tx.type === 'income' ? 'Entrada' : 'Saída', tx.category || '-', tx.paymentMethod || '-', formatCurrency(tx.amount)]);
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(';'), ...rows.map(e => e.join(';'))].join('\n');
-    const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `Extrato_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    if (filteredTransactions.length === 0) return;
+
+    const incomes = filteredTransactions.filter(t => t.type === 'income');
+    const expenses = filteredTransactions.filter(t => t.type === 'expense');
+    
+    const totalIncome = incomes.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    const totalExpense = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    const balance = totalIncome - totalExpense;
+
+    let periodName = filterPeriod;
+    if (filterPeriod === 'specific_month') periodName = `Mês ${selectedMonth}/${selectedYear}`;
+    if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
+    if (filterPeriod === 'month') periodName = 'Mês Atual';
+
+    // Criação da tabela HTML estruturada para virar Excel
+    let excelHTML = `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+          <meta charset="utf-8">
+          <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+              th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+              .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
+              .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
+              .section-title { font-weight: bold; text-align: center; color: white; }
+              .income-title { background-color: #10b981; }
+              .expense-title { background-color: #ef4444; }
+              .summary-row { font-weight: bold; }
+              .summary-bg { background-color: #f8fafc; }
+              .text-right { text-align: right; }
+              .text-green { color: #059669; }
+              .text-red { color: #dc2626; }
+              .text-blue { color: #000066; }
+          </style>
+      </head>
+      <body>
+          <table>
+              <tr>
+                  <td colspan="4" class="header">RELATÓRIO FINANCEIRO (DRE) - LD FINANÇAS</td>
+              </tr>
+              <tr>
+                  <td colspan="4" class="sub-header">Titular: ${userProfile?.name} | Período: ${periodName} | Gerado em: ${formatDate(new Date().toISOString().split('T')[0])}</td>
+              </tr>
+              <tr><td colspan="4"></td></tr>
+              
+              <!-- RESUMO GERAL -->
+              <tr class="summary-row summary-bg">
+                  <td colspan="3">RECEITAS TOTAIS (+)</td>
+                  <td class="text-right text-green">R$ ${formatNumber(totalIncome)}</td>
+              </tr>
+              <tr class="summary-row summary-bg">
+                  <td colspan="3">DESPESAS TOTAIS (-)</td>
+                  <td class="text-right text-red">-R$ ${formatNumber(totalExpense)}</td>
+              </tr>
+              <tr class="summary-row summary-bg">
+                  <td colspan="3">SALDO LÍQUIDO DO PERÍODO (=)</td>
+                  <td class="text-right ${balance < 0 ? 'text-red' : 'text-blue'}">R$ ${formatNumber(balance)}</td>
+              </tr>
+              
+              <tr><td colspan="4"></td></tr>
+
+              <!-- DETALHAMENTO DE ENTRADAS -->
+              <tr>
+                  <td colspan="4" class="section-title income-title">DETALHAMENTO DE ENTRADAS (RECEITAS)</td>
+              </tr>
+              <tr class="sub-header">
+                  <td>Data</td>
+                  <td>Categoria / Descrição</td>
+                  <td>Forma Pagto</td>
+                  <td class="text-right">Valor Bruto</td>
+              </tr>
+    `;
+
+    if (incomes.length === 0) {
+        excelHTML += `<tr><td colspan="4" style="text-align: center;">Nenhuma entrada registada neste período.</td></tr>`;
+    } else {
+        incomes.forEach(tx => {
+            excelHTML += `
+                <tr>
+                    <td>${formatDate(tx.date)}</td>
+                    <td>${tx.category || '-'}</td>
+                    <td>${tx.paymentMethod || '-'}</td>
+                    <td class="text-right text-green">R$ ${formatNumber(tx.amount)}</td>
+                </tr>
+            `;
+        });
+    }
+
+    excelHTML += `
+              <tr><td colspan="4"></td></tr>
+              <!-- DETALHAMENTO DE SAÍDAS -->
+              <tr>
+                  <td colspan="4" class="section-title expense-title">DETALHAMENTO DE SAÍDAS (DESPESAS)</td>
+              </tr>
+              <tr class="sub-header">
+                  <td>Data</td>
+                  <td>Categoria / Descrição</td>
+                  <td>Forma Pagto</td>
+                  <td class="text-right">Valor</td>
+              </tr>
+    `;
+
+    if (expenses.length === 0) {
+        excelHTML += `<tr><td colspan="4" style="text-align: center;">Nenhuma saída registada neste período.</td></tr>`;
+    } else {
+        expenses.forEach(tx => {
+            excelHTML += `
+                <tr>
+                    <td>${formatDate(tx.date)}</td>
+                    <td>${tx.category || '-'}</td>
+                    <td>${tx.paymentMethod || '-'}</td>
+                    <td class="text-right text-red">-R$ ${formatNumber(tx.amount)}</td>
+                </tr>
+            `;
+        });
+    }
+
+    excelHTML += `
+          </table>
+      </body>
+      </html>
+    `;
+
+    // Converte para URI e força o download
+    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `DRE_LD_Financas_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const renderFilterBar = () => (
@@ -883,7 +1010,7 @@ function DashboardApp({ userProfile }) {
           <div className="w-full md:w-auto"><p className="text-slate-600 mb-4 font-medium md:max-w-[300px]">Precisa de ajuda para usar o sistema, relatar um problema ou reativar o seu plano? Clique no botão para chamar a nossa equipa técnica.</p><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
         </div>
       </Card>
-      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> e clique em <b>"Assinar via WhatsApp"</b>. Você será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode acessar de qualquer celular ou computador.</p></Card></div></div>
+      <div className="mt-10"><h3 className="font-bold text-slate-800 text-lg mb-4">Dúvidas Frequentes</h3><div className="space-y-3"><Card className="p-5 hover:border-emerald-200 transition-colors border-l-4 border-l-emerald-500 shadow-sm"><h4 className="font-bold text-slate-800 mb-2">O meu plano expirou, como renovar?</h4><p className="text-slate-600 text-sm">Acesse a aba <b>"Meu Plano"</b> e clique em <b>"Assinar via WhatsApp"</b>. Você será direcionado para o nosso WhatsApp para reativar o seu acesso na hora!</p></Card><Card className="p-5 hover:border-slate-300 transition-colors"><h4 className="font-bold text-slate-800 mb-2">Os meus dados estão seguros?</h4><p className="text-slate-600 text-sm">Sim! Os seus dados são guardados no Firebase da Google em tempo real. Pode aceder de qualquer telemóvel ou computador.</p></Card></div></div>
     </div>
   );
 
@@ -901,15 +1028,15 @@ function DashboardApp({ userProfile }) {
            className="w-full h-auto aspect-video object-cover"
          >
            <source src="https://ldsite.com.br/wp-content/uploads/2026/06/LD-FINANCAS-1.mp4" type="video/mp4" />
-           Seu navegador não suporta a visualização do vídeo.
+           O seu navegador não suporta a visualização do vídeo.
          </video>
       </div>
 
       <div className="space-y-4 mt-8">
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Acesse a aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Aluguel) e receitas (Serviço, Venda).</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá em "Lançamentos" &gt; "Novo Lançamento". Registre os valores que <b>já entraram ou saíram</b> de fato do seu bolso ou banco hoje.</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende seus boletos e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
-         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo do Painel Principal para ver o Mês. Em Lançamentos, clique em "Excel" para baixar e enviar para o contador.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-emerald-400"><div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">1</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Cadastre as suas Categorias</h3><p className="text-slate-600">Aceda à aba "Categorias" e crie os nomes dos seus tipos de despesas (Luz, Renda) e receitas (Serviço, Venda).</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-blue-400"><div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">2</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Lançamentos (O seu Caixa Real)</h3><p className="text-slate-600">Vá a "Lançamentos" &gt; "Novo Lançamento". Registe os valores que <b>já entraram ou saíram</b> de facto do seu bolso ou banco hoje.</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-amber-400"><div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">3</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Contas a Pagar/Receber (Agendamentos)</h3><p className="text-slate-600">Agende as suas faturas e pagamentos futuros. Quando o dia chegar e você pagar, clique em <b>"Dar Baixa"</b>. O valor é transferido automaticamente para o seu Caixa Real!</p></div></Card>
+         <Card className="p-6 flex gap-4 items-start border-l-4 border-l-purple-400"><div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold shrink-0">4</div><div><h3 className="font-bold text-lg text-slate-800 mb-1">Acompanhe e Exporte</h3><p className="text-slate-600">Use os botões de Filtro no topo do Painel Principal para ver o Mês. Em Lançamentos, clique em "Excel" para descarregar e enviar para o contabilista.</p></div></Card>
       </div>
     </div>
   );
@@ -936,7 +1063,7 @@ function DashboardApp({ userProfile }) {
             <div className="text-center py-8">
                <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div>
                <h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4>
-               <p className="text-slate-600">Você tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
+               <p className="text-slate-600">Tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
             </div>
           </Card>
         </div>
@@ -945,7 +1072,7 @@ function DashboardApp({ userProfile }) {
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
+        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
         <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
           <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
               <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
@@ -1086,7 +1213,7 @@ function DashboardApp({ userProfile }) {
                <p className="text-slate-600 mb-8 max-w-md mx-auto">A sua conta foi suspensa pelo Administrador do sistema. Por favor, entre em contato com o suporte para obter mais detalhes.</p>
              )}
              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, minha conta está bloqueada no LD Finanças e preciso de ajuda para renovar.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
+                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, a minha conta está bloqueada no LD Finanças e preciso de ajuda para renovar.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
                 <Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair da Conta</Button>
              </div>
           </div>
