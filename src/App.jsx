@@ -504,17 +504,15 @@ function DashboardApp({ userProfile }) {
       if (!trimmed) return;
       
       let newCitiesList = [...citiesList];
-      let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity)); // Clone seguro
+      let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
       
       if (cityModal.originalName) {
-          // Edição
           newCitiesList = newCitiesList.map(c => c === cityModal.originalName ? trimmed : c);
           newCatsByCity[trimmed] = newCatsByCity[cityModal.originalName];
           delete newCatsByCity[cityModal.originalName];
           if (activeCityManager === cityModal.originalName) setActiveCityManager(trimmed);
           if (filterCity === cityModal.originalName) setFilterCity(trimmed);
       } else {
-          // Nova
           if (!newCitiesList.includes(trimmed)) {
               newCitiesList.push(trimmed);
               newCatsByCity[trimmed] = { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] };
@@ -556,7 +554,6 @@ function DashboardApp({ userProfile }) {
         const trimmedName = currentName.trim();
         if (!trimmedName) return;
         
-        // DEEP CLONE SEGURO para evitar conflitos de estado no React
         let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
         let cityCats = newCatsByCity[activeCityManager] || { income: ['Outros'], expense: ['Outros'] };
         
@@ -579,7 +576,6 @@ function DashboardApp({ userProfile }) {
   const requestDeleteCategory = (catName, type) => {
     openConfirm('Excluir Categoria', `Tem a certeza que deseja excluir "${catName}" de ${activeCityManager}?`, async () => {
         try {
-            // DEEP CLONE SEGURO para exclusão
             let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
             let cityCats = newCatsByCity[activeCityManager];
             
@@ -704,6 +700,102 @@ function DashboardApp({ userProfile }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a"); link.href = url;
     link.download = `DRE_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+  };
+
+  const handleExportBillsCSV = () => {
+    if (filteredBills.length === 0) return;
+    const pendingBills = filteredBills.filter(b => b.status === 'pending');
+    const paidBills = filteredBills.filter(b => b.status === 'paid');
+    
+    let periodName = filterPeriod;
+    if (filterPeriod === 'specific_month') periodName = `Mês ${selectedMonth}/${selectedYear}`;
+    if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
+    if (filterPeriod === 'month') periodName = 'Mês Atual';
+    
+    let excelHTML = `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+          <meta charset="utf-8">
+          <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+              th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+              .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
+              .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
+              .section-title { font-weight: bold; text-align: center; color: white; margin-top: 20px; }
+              .pending-title { background-color: #f59e0b; }
+              .paid-title { background-color: #10b981; }
+              .text-right { text-align: right; }
+              .text-green { color: #059669; }
+              .text-red { color: #dc2626; }
+              .font-bold { font-weight: bold; }
+          </style>
+      </head>
+      <body>
+          <table>
+              <tr><td colspan="6" class="header">RELATÓRIO DE PREVISÕES (CONTAS A PAGAR E RECEBER)</td></tr>
+              <tr><td colspan="6" class="sub-header">Titular: ${userProfile?.name} | Cidade/Filtro: ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | Período: ${periodName}</td></tr>
+              <tr><td colspan="6"></td></tr>
+              
+              <tr><td colspan="6" class="section-title pending-title">AGENDAMENTOS PENDENTES</td></tr>
+              <tr class="sub-header">
+                <td>Status</td><td>Tipo</td><td>Data Vencimento</td><td>Cidade</td><td>Categoria / Descrição</td><td class="text-right">Valor Previsto</td>
+              </tr>
+    `;
+
+    if (pendingBills.length === 0) {
+        excelHTML += `<tr><td colspan="6" style="text-align: center;">Nenhuma conta pendente para este período.</td></tr>`;
+    } else {
+        pendingBills.forEach(bill => {
+            const typeStr = bill.type === 'income' ? 'A Receber' : 'A Pagar';
+            const valClass = bill.type === 'income' ? 'text-green' : 'text-red';
+            const valPrefix = bill.type === 'income' ? '+' : '-';
+            excelHTML += `
+              <tr>
+                <td class="font-bold">Pendente</td>
+                <td>${typeStr}</td>
+                <td>${formatDate(bill.dueDate)}</td>
+                <td>${bill.city || 'Geral'}</td>
+                <td>${bill.category || '-'}</td>
+                <td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.amount)}</td>
+              </tr>
+            `;
+        });
+    }
+
+    excelHTML += `
+              <tr><td colspan="6"></td></tr>
+              <tr><td colspan="6" class="section-title paid-title">HISTÓRICO DE BAIXAS (PAGAS/RECEBIDAS)</td></tr>
+              <tr class="sub-header">
+                <td>Status</td><td>Tipo</td><td>Data Efetiva</td><td>Cidade</td><td>Categoria / Descrição</td><td class="text-right">Valor Pago/Recebido</td>
+              </tr>
+    `;
+
+    if (paidBills.length === 0) {
+        excelHTML += `<tr><td colspan="6" style="text-align: center;">Nenhuma baixa efetuada neste período.</td></tr>`;
+    } else {
+        paidBills.forEach(bill => {
+            const typeStr = bill.type === 'income' ? 'Recebido' : 'Pago';
+            const valClass = bill.type === 'income' ? 'text-green' : 'text-red';
+            const valPrefix = bill.type === 'income' ? '+' : '-';
+            excelHTML += `
+              <tr>
+                <td class="font-bold text-green">Baixado</td>
+                <td>${typeStr}</td>
+                <td>${formatDate(bill.paymentDate)}</td>
+                <td>${bill.city || 'Geral'}</td>
+                <td><del>${bill.category || '-'}</del></td>
+                <td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.paidAmount)}</td>
+              </tr>
+            `;
+        });
+    }
+
+    excelHTML += `</table></body></html>`;
+    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url;
+    link.download = `Previsoes_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
@@ -857,7 +949,10 @@ function DashboardApp({ userProfile }) {
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Contas a Pagar/Receber</h2><p className="text-slate-500 text-sm mt-1">Ao dar baixa, o valor entra no caixa real.</p></div>
-          <Button onClick={handleOpenBillModal} icon={userProfile.plan === 'Básico' ? Lock : Plus} className={userProfile.plan === 'Básico' ? 'bg-slate-300 text-slate-700' : ''}>{userProfile.plan === 'Básico' ? 'Plano Pro' : 'Agendar'}</Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button onClick={handleExportBillsCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200" icon={Download}>Baixar Previsões</Button>
+            <Button onClick={handleOpenBillModal} icon={userProfile.plan === 'Básico' ? Lock : Plus} className={userProfile.plan === 'Básico' ? 'bg-slate-300 text-slate-700' : ''}>{userProfile.plan === 'Básico' ? 'Plano Pro' : 'Agendar'}</Button>
+          </div>
         </header>
         {renderFilterBar()}
         
@@ -912,7 +1007,6 @@ function DashboardApp({ userProfile }) {
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Cidades & Categorias</h2><p className="text-slate-500 mt-1">Crie filiais/cidades e organize categorias específicas para cada uma.</p></header>
         
-        {/* BLOCO DE GESTÃO DE CIDADES */}
         <div className="bg-slate-800 rounded-2xl p-6 shadow-sm mb-6">
            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                <h3 className="font-bold text-lg text-white flex items-center gap-2"><Building size={20}/> Cidades / Escritórios</h3>
@@ -934,7 +1028,6 @@ function DashboardApp({ userProfile }) {
            <p className="text-slate-400 text-xs mt-3">* O sistema protege seus dados vinculando lançamentos antigos na cidade "Geral". Pode alterar o nome de qualquer cidade.</p>
         </div>
 
-        {/* BLOCO DE GESTÃO DE CATEGORIAS DA CIDADE ATIVA */}
         <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2">Categorias de: <span className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">{activeCityManager}</span></h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="p-6 border-t-4 border-t-emerald-500">
@@ -1117,7 +1210,6 @@ function DashboardApp({ userProfile }) {
         )}
       </main>
 
-      
       {/* MODAL DE LANÇAMENTO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
