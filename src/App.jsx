@@ -231,7 +231,7 @@ function DashboardApp({ userProfile }) {
   const [bills, setBills] = useState([]); 
   const [adminUsers, setAdminUsers] = useState([]);
 
-  // SISTEMA MULTI-CIDADES (MIGRAÇÃO INTELIGENTE)
+  // SISTEMA MULTI-CIDADES
   const [citiesList, setCitiesList] = useState(['Geral']);
   const [categoriesByCity, setCategoriesByCity] = useState({ 'Geral': { income: ['Outros'], expense: ['Outros'] } });
   
@@ -246,7 +246,6 @@ function DashboardApp({ userProfile }) {
   const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
-  // Modais
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0], city: 'Geral' });
@@ -256,13 +255,22 @@ function DashboardApp({ userProfile }) {
   
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
+  
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: 'Geral' });
+  
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
-  const sortCategories = (cats) => { return [...(cats || [])].sort((a, b) => { if (a.toLowerCase() === 'outros') return -1; if (b.toLowerCase() === 'outros') return 1; return a.localeCompare(b); }); };
+  
+  const sortCategories = (cats) => { 
+    return [...(cats || [])].sort((a, b) => { 
+      if (a.toLowerCase() === 'outros') return -1; 
+      if (b.toLowerCase() === 'outros') return 1; 
+      return a.localeCompare(b); 
+    }); 
+  };
 
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -284,7 +292,7 @@ function DashboardApp({ userProfile }) {
                 setCategoriesByCity(data.categoriesByCity);
                 if (!data.citiesList.includes(activeCityManager)) setActiveCityManager(data.citiesList[0] || 'Geral');
             } else {
-                // Converter estrutura antiga para a nova baseada em Cidades sem perder dados
+                // Converter estrutura antiga para a nova baseada em Cidades
                 const defaultCity = 'Geral';
                 const oldIncome = data.income || ['Serviço', 'Venda', 'Outros'];
                 const oldExpense = data.expense || ['Alimentação', 'Moradia', 'Transporte', 'Outros'];
@@ -297,8 +305,6 @@ function DashboardApp({ userProfile }) {
                 setCitiesList(newData.citiesList);
                 setCategoriesByCity(newData.categoriesByCity);
                 setActiveCityManager(defaultCity);
-                
-                // Grava a migração silenciosamente
                 setDoc(catRef, newData, { merge: true });
             }
         } else {
@@ -376,7 +382,6 @@ function DashboardApp({ userProfile }) {
       const { name, value } = e.target;
       setFormData(prev => {
          let newData = { ...prev, [name]: value };
-         // Se a Cidade Mudar, atualizamos as categorias disponíveis para a nova cidade
          if (name === 'city') {
              const catsForNewCity = categoriesByCity[value] || { income: ['Outros'], expense: ['Outros'] };
              const catList = newData.type === 'income' ? catsForNewCity.income : catsForNewCity.expense;
@@ -467,6 +472,17 @@ function DashboardApp({ userProfile }) {
     setIsBillModalOpen(false);
   };
 
+  const requestDeleteBill = (id) => {
+    openConfirm('Excluir Agendamento', 'Apagar esta conta do seu histórico/agenda?', async () => {
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', id));
+        closeConfirm();
+    });
+  };
+
+  const openSettleModal = (bill) => {
+     setSettleModal({ isOpen: true, bill: bill, paymentDate: new Date().toISOString().split('T')[0], paidAmount: bill.amount, paymentMethod: PAYMENT_METHODS[0] });
+  };
+
   const handleSettleBillSubmit = async (e) => {
      e.preventDefault();
      const bill = settleModal.bill;
@@ -488,17 +504,17 @@ function DashboardApp({ userProfile }) {
       if (!trimmed) return;
       
       let newCitiesList = [...citiesList];
-      let newCatsByCity = { ...categoriesByCity };
+      let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity)); // Clone seguro
       
       if (cityModal.originalName) {
-          // Edição de Cidade Existente
+          // Edição
           newCitiesList = newCitiesList.map(c => c === cityModal.originalName ? trimmed : c);
           newCatsByCity[trimmed] = newCatsByCity[cityModal.originalName];
           delete newCatsByCity[cityModal.originalName];
           if (activeCityManager === cityModal.originalName) setActiveCityManager(trimmed);
           if (filterCity === cityModal.originalName) setFilterCity(trimmed);
       } else {
-          // Nova Cidade
+          // Nova
           if (!newCitiesList.includes(trimmed)) {
               newCitiesList.push(trimmed);
               newCatsByCity[trimmed] = { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] };
@@ -510,12 +526,12 @@ function DashboardApp({ userProfile }) {
   };
 
   const requestDeleteCity = (city) => {
-      if (city === 'Geral') return; // Segurança contra quebra
+      if (city === 'Geral') return;
       openConfirm('Excluir Cidade', `Tem a certeza que deseja excluir "${city}"? Os lançamentos desta cidade não serão apagados, mas ficarão orfãos.`, async () => {
           let newCitiesList = citiesList.filter(c => c !== city);
-          let newCatsByCity = { ...categoriesByCity };
+          let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
           delete newCatsByCity[city];
-          if (newCitiesList.length === 0) newCitiesList.push('Geral'); // Fallback
+          if (newCitiesList.length === 0) newCitiesList.push('Geral');
           
           await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { citiesList: newCitiesList, categoriesByCity: newCatsByCity }, { merge: true });
           if (activeCityManager === city) setActiveCityManager(newCitiesList[0]);
@@ -524,38 +540,59 @@ function DashboardApp({ userProfile }) {
       });
   };
 
+  const handleOpenCategoryModal = (type, categoryName = null) => {
+      setCategoryModal({ 
+          isOpen: true, 
+          type: type, 
+          originalName: categoryName || '', 
+          currentName: categoryName || '' 
+      });
+  };
+
   const handleSaveCategory = async (e) => {
     e.preventDefault();
-    const { originalName, currentName, type } = categoryModal;
-    const trimmedName = currentName.trim();
-    if (!trimmedName) return;
-    
-    let newCatsByCity = { ...categoriesByCity };
-    let cityCats = newCatsByCity[activeCityManager] || { income: ['Outros'], expense: ['Outros'] };
-    
-    if (type === 'income') {
-      if (originalName) cityCats.income = cityCats.income.map(c => c === originalName ? trimmedName : c);
-      else if (!cityCats.income.includes(trimmedName)) cityCats.income.push(trimmedName);
-    } else {
-      if (originalName) cityCats.expense = cityCats.expense.map(c => c === originalName ? trimmedName : c);
-      else if (!cityCats.expense.includes(trimmedName)) cityCats.expense.push(trimmedName);
+    try {
+        const { originalName, currentName, type } = categoryModal;
+        const trimmedName = currentName.trim();
+        if (!trimmedName) return;
+        
+        // DEEP CLONE SEGURO para evitar conflitos de estado no React
+        let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
+        let cityCats = newCatsByCity[activeCityManager] || { income: ['Outros'], expense: ['Outros'] };
+        
+        if (type === 'income') {
+          if (originalName) cityCats.income = cityCats.income.map(c => c === originalName ? trimmedName : c);
+          else if (!cityCats.income.includes(trimmedName)) cityCats.income.push(trimmedName);
+        } else {
+          if (originalName) cityCats.expense = cityCats.expense.map(c => c === originalName ? trimmedName : c);
+          else if (!cityCats.expense.includes(trimmedName)) cityCats.expense.push(trimmedName);
+        }
+        
+        newCatsByCity[activeCityManager] = cityCats;
+        await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { categoriesByCity: newCatsByCity }, { merge: true });
+        setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
+    } catch (err) {
+        console.error("Erro ao salvar categoria:", err);
     }
-    
-    newCatsByCity[activeCityManager] = cityCats;
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { categoriesByCity: newCatsByCity }, { merge: true });
-    setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   };
 
   const requestDeleteCategory = (catName, type) => {
     openConfirm('Excluir Categoria', `Tem a certeza que deseja excluir "${catName}" de ${activeCityManager}?`, async () => {
-        let newCatsByCity = { ...categoriesByCity };
-        let cityCats = newCatsByCity[activeCityManager];
-        if (type === 'income') cityCats.income = cityCats.income.filter(c => c !== catName);
-        else cityCats.expense = cityCats.expense.filter(c => c !== catName);
-        
-        newCatsByCity[activeCityManager] = cityCats;
-        await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { categoriesByCity: newCatsByCity }, { merge: true });
-        closeConfirm();
+        try {
+            // DEEP CLONE SEGURO para exclusão
+            let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
+            let cityCats = newCatsByCity[activeCityManager];
+            
+            if (type === 'income') cityCats.income = cityCats.income.filter(c => c !== catName);
+            else cityCats.expense = cityCats.expense.filter(c => c !== catName);
+            
+            newCatsByCity[activeCityManager] = cityCats;
+            await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { categoriesByCity: newCatsByCity }, { merge: true });
+            closeConfirm();
+        } catch (err) {
+            console.error("Erro ao excluir categoria:", err);
+            closeConfirm();
+        }
     });
   };
 
@@ -1080,11 +1117,12 @@ function DashboardApp({ userProfile }) {
         )}
       </main>
 
+      
       {/* MODAL DE LANÇAMENTO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
              <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">{formData.type === 'income' ? <ArrowUpCircle className="text-emerald-500"/> : <ArrowDownCircle className="text-red-500"/>}{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3><button onClick={handleCloseModal} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button></div>
              <div className="p-6">
                 <form onSubmit={handleSaveTransaction}>
@@ -1092,7 +1130,6 @@ function DashboardApp({ userProfile }) {
                   
                   <Select label="Cidade/Escritório" name="city" value={formData.city} onChange={handleFormChange} required options={citiesList} />
                   
-                  {/* CATEGORIAS SÃO PUXADAS DA CIDADE SELECIONADA ACIMA */}
                   <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? sortCategories((categoriesByCity[formData.city] || {}).income) : sortCategories((categoriesByCity[formData.city] || {}).expense)} />
                   {formData.category.toLowerCase().includes('outros') && <Input label="Descrição" name="customDescription" value={formData.customDescription} onChange={handleFormChange} placeholder="Ex: Feira..." required />}
                   
@@ -1129,7 +1166,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE CIDADES E ADMINISTRAÇÃO (OMITIDOS NESTE SNIPPET DE RESUMO MAS PRESENTE NA APLICAÇÃO) */}
+      {/* MODAL DE CIDADES */}
       {cityModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCityModal({...cityModal, isOpen: false})}></div>
@@ -1143,6 +1180,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
       
+      {/* MODAL DE CATEGORIAS */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({...categoryModal, isOpen: false})}></div>
@@ -1156,6 +1194,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
       
+      {/* MODAL DE DAR BAIXA (SETTLE BILL) */}
       {settleModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModal({...settleModal, isOpen: false})}></div>
@@ -1176,6 +1215,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
+      {/* MODAL DE EDIÇÃO DO ADMIN */}
       {adminEditModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
@@ -1196,6 +1236,7 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
+      {/* MODAL DE CONFIRMAÇÃO GENÉRICA */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
