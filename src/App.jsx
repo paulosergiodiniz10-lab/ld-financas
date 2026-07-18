@@ -226,7 +226,6 @@ function DashboardApp({ userProfile }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUrgentAlert, setShowUrgentAlert] = useState(false);
 
-  // Estados dos Dados Base
   const [transactions, setTransactions] = useState([]);
   const [bills, setBills] = useState([]); 
   const [adminUsers, setAdminUsers] = useState([]);
@@ -235,7 +234,6 @@ function DashboardApp({ userProfile }) {
   const [citiesList, setCitiesList] = useState(['Geral']);
   const [categoriesByCity, setCategoriesByCity] = useState({ 'Geral': { income: ['Outros'], expense: ['Outros'] } });
   
-  // Abas de visualização e filtros
   const [activeCityManager, setActiveCityManager] = useState('Geral'); 
   const [filterCity, setFilterCity] = useState('all'); 
   const [filterPeriod, setFilterPeriod] = useState('month'); 
@@ -1096,38 +1094,59 @@ function DashboardApp({ userProfile }) {
 
   const renderPlans = () => {
     const isAdmin = userProfile.email === ADMIN_EMAIL;
+
     if (isAdmin) {
       return (
         <div className="space-y-6 animate-in fade-in duration-500">
-          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2></header>
+          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
           <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-400 bg-amber-50/30">
-            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6"><div><p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">Admin</h3></div><div className="text-right"><span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span><p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p></div></div>
+            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6">
+                <div>
+                  <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-base">workspace_premium</span> Plano Atual</p>
+                  <h3 className="text-3xl font-black text-slate-800">Admin</h3>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span>
+                  <p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p>
+                </div>
+            </div>
+            <div className="text-center py-8">
+               <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div>
+               <h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4>
+               <p className="text-slate-600">Tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
+            </div>
           </Card>
         </div>
       );
     }
+
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2></header>
+        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2><p className="text-slate-500 mt-1">Acompanhe os dias restantes da sua assinatura.</p></header>
         <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
           <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
               <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
               <div className="text-right"><span className={`inline-block font-bold px-3 py-1 rounded-full text-sm ${userProfile.daysRemaining > 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.daysRemaining > 0 ? 'Ativo' : 'Expirado'}</span><p className="text-sm text-slate-500 mt-2 font-medium">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias restantes`}</p></div>
           </div>
           <div className="space-y-6">
-              <h4 className="font-bold text-slate-800 text-lg">Atualizar Assinatura</h4>
+              <h4 className="font-bold text-slate-800 text-lg">Conheça as opções</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+                
+                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5><p className="text-slate-500 text-sm mb-4 h-10">Lançamentos ilimitados diários e categorias personalizadas.</p><p className="text-2xl font-black text-slate-800 mb-6">R$ 9,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  <Button variant="outline" className="w-full bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Básico do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
+                  <p className="text-slate-500 text-sm mb-6 flex-1">Lançamentos ilimitados diários e categorias personalizadas. Ideal para gestão rápida do seu caixa.</p>
+                  <Button variant="outline" className="w-full bg-white mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
-                <div className={`border-2 rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+
+                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5><p className="text-slate-500 text-sm mb-4 h-10">Tudo do Básico + <b>Agendamentos e Multi-Cidades</b>.</p><p className="text-2xl font-black text-emerald-600 mb-6">R$ 19,90<span className="text-sm font-normal text-slate-500">/mês</span></p>
-                  <Button className="w-full" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero assinar o Plano Pro do LD Finanças!', '_blank')}>Assinar via WhatsApp</Button>
+                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Completo</div>
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
+                  <p className="text-slate-500 text-sm mb-6 flex-1">Tudo do Básico + <b>Gestão de Contas a Pagar/Receber e Multi-Cidades (Escritórios)</b>.</p>
+                  <Button className="w-full mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
+
               </div>
           </div>
         </Card>
