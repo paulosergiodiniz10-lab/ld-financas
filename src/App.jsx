@@ -8,6 +8,7 @@ import {
   getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot 
 } from "firebase/firestore";
 
+// --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyDlnaN0rfER6AAOBYJJ_uvsZN5LhtnR08k",
   authDomain: "ld-financas.firebaseapp.com",
@@ -22,6 +23,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const APP_ID = 'ld-financas';
 
+// --- ÍCONES (Material Symbols) ---
 const IconWrapper = ({ name, size = 24, className = '' }) => (
   <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>{name}</span>
 );
@@ -46,6 +48,7 @@ const Download = (p) => <IconWrapper name="download" {...p} />;
 const Tag = (p) => <IconWrapper name="sell" {...p} />;
 const Visibility = (p) => <IconWrapper name="visibility" {...p} />;
 const VisibilityOff = (p) => <IconWrapper name="visibility_off" {...p} />;
+const CardIcon = CreditCard;
 const AlertTriangle = (p) => <IconWrapper name="warning" {...p} />;
 const Lock = (p) => <IconWrapper name="lock" {...p} />;
 const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
@@ -53,11 +56,12 @@ const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 const MapPin = (p) => <IconWrapper name="location_on" {...p} />;
 const Building = (p) => <IconWrapper name="domain" {...p} />;
-const CardIcon = CreditCard;
 
+// --- CONFIGURAÇÕES DO SISTEMA ---
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
+// --- UTILITÁRIOS ---
 const formatNumber = (value) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
 const formatDate = (dateString) => {
   if (!dateString) return '';
@@ -65,6 +69,7 @@ const formatDate = (dateString) => {
   return `${day}/${month}/${year}`;
 };
 
+// --- COMPONENTES BÁSICOS ---
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden ${className}`}>{children}</div>
 );
@@ -116,6 +121,7 @@ const Select = ({ label, name, value, onChange, options, required = false }) => 
   </div>
 );
 
+// --- TELA DE LOGIN E CADASTRO REAL ---
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -138,7 +144,8 @@ const Auth = () => {
       } else {
         const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const user = userCred.user;
-        const today = new Date().toISOString().split('T')[0];
+        const tzDate = new Date();
+        const today = `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
         
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), {
           name: formData.name || 'Novo Utilizador',
@@ -199,21 +206,37 @@ const Auth = () => {
                <Input label="WhatsApp (com código de país)" name="whatsapp" type="tel" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="Ex: 351999999999" required={!isLogin} />
              </div>
            )}
+           
            <Input label="O seu E-mail" type="email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="exemplo@email.com" required />
+           
            <Input 
              label="A sua Senha" type={showPassword ? 'text' : 'password'} name="password" 
              value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
              placeholder="••••••••" required 
-             rightElement={<button type="button" onClick={() => setShowPassword(!showPassword)} className="p-1 text-slate-400 hover:text-emerald-600 transition-colors">{showPassword ? <VisibilityOff size={20} /> : <Visibility size={20} />}</button>}
+             rightElement={
+               <button type="button" onClick={() => setShowPassword(!showPassword)} className="p-1 text-slate-400 hover:text-emerald-600 transition-colors">
+                 {showPassword ? <VisibilityOff size={20} /> : <Visibility size={20} />}
+               </button>
+             }
            />
-           {isLogin && <div className="flex justify-end mt-[-8px] mb-4"><button type="button" onClick={handleForgotPassword} className="text-sm font-medium text-emerald-600 hover:text-emerald-700">Esqueci a minha senha</button></div>}
-           <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm mt-4 active:scale-[0.98]">{loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Registar')}</button>
+
+           {isLogin && (
+             <div className="flex justify-end mt-[-8px] mb-4">
+               <button type="button" onClick={handleForgotPassword} className="text-sm font-medium text-emerald-600 hover:text-emerald-700">Esqueci a minha senha</button>
+             </div>
+           )}
+
+           <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm mt-4 active:scale-[0.98]">
+             {loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Registar')}
+           </button>
         </form>
 
         <div className="mt-8 text-center pt-6 border-t border-slate-100">
           <p className="text-sm text-slate-600">
             {isLogin ? "Ainda não tem conta? " : "Já tem conta? "}
-            <button type="button" onClick={() => {setIsLogin(!isLogin); setMessage({type:'', text:''});}} className="font-bold text-emerald-600 hover:text-emerald-700">{isLogin ? "Crie uma agora." : "Faça login."}</button>
+            <button type="button" onClick={() => {setIsLogin(!isLogin); setMessage({type:'', text:''});}} className="font-bold text-emerald-600 hover:text-emerald-700">
+              {isLogin ? "Crie uma agora." : "Faça login."}
+            </button>
           </p>
         </div>
       </div>
@@ -221,10 +244,14 @@ const Auth = () => {
   );
 }
 
+// --- PAINEL PRINCIPAL (DASHBOARD REAL) ---
 function DashboardApp({ userProfile }) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // SISTEMA DE ALERTA REFORMULADO
   const [showUrgentAlert, setShowUrgentAlert] = useState(false);
+  const [alertFired, setAlertFired] = useState(false); 
 
   const [transactions, setTransactions] = useState([]);
   const [bills, setBills] = useState([]); 
@@ -283,14 +310,11 @@ function DashboardApp({ userProfile }) {
     const unsubCat = onSnapshot(catRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            
-            // LÓGICA DE MIGRAÇÃO SEGURA PARA CIDADES
             if (data.citiesList && data.categoriesByCity) {
                 setCitiesList(data.citiesList);
                 setCategoriesByCity(data.categoriesByCity);
                 if (!data.citiesList.includes(activeCityManager)) setActiveCityManager(data.citiesList[0] || 'Geral');
             } else {
-                // Converter estrutura antiga para a nova baseada em Cidades
                 const defaultCity = 'Geral';
                 const oldIncome = data.income || ['Serviço', 'Venda', 'Outros'];
                 const oldExpense = data.expense || ['Alimentação', 'Moradia', 'Transporte', 'Outros'];
@@ -319,7 +343,9 @@ function DashboardApp({ userProfile }) {
     if (userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => { 
-            const today = new Date().toISOString().split('T')[0];
+            const tzDate = new Date();
+            const today = `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
+            
             const fetchedUsers = snapshot.docs.map(d => {
                 let u = { uid: d.id, ...d.data() };
                 if (u.email !== ADMIN_EMAIL && u.plan !== 'Admin') {
@@ -345,14 +371,23 @@ function DashboardApp({ userProfile }) {
     return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const urgentBillsCount = useMemo(() => bills.filter(b => b.status === 'pending' && b.dueDate <= todayStr).length, [bills, todayStr]);
+  // Obter Data Local Segura (Evita erro de UTC virar meia noite no Brasil)
+  const todayStr = useMemo(() => {
+     const tzDate = new Date();
+     return `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
+  }, []);
 
+  const urgentBillsCount = useMemo(() => {
+    return bills.filter(b => b.status === 'pending' && b.dueDate <= todayStr).length;
+  }, [bills, todayStr]);
+
+  // ALERTA DISPARA 1 VEZ POR RECARREGAMENTO/LOGIN
   useEffect(() => {
-    if (urgentBillsCount > 0 && !sessionStorage.getItem(`urgentAlertShown_${userProfile.uid}`)) {
-      setShowUrgentAlert(true); sessionStorage.setItem(`urgentAlertShown_${userProfile.uid}`, 'true');
+    if (urgentBillsCount > 0 && !alertFired) {
+      setShowUrgentAlert(true);
+      setAlertFired(true); 
     }
-  }, [urgentBillsCount, userProfile.uid]);
+  }, [urgentBillsCount, alertFired]);
 
   const handleLogout = () => openConfirm('Sair do Sistema', 'Tem a certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
@@ -958,7 +993,7 @@ function DashboardApp({ userProfile }) {
         
         {renderFilterBar()}
         
-        {/* CAMPOS DE FILTRO EXTRA - CORRIGIDOS AQUI */}
+        {/* CORREÇÃO DAS CAIXAS DE DATA NA TELA DE PREVISÕES */}
         {filterPeriod === 'custom' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in"><Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} /><Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} /></div>)}
         {filterPeriod === 'specific_month' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in"><Select label="Mês" name="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} options={[{value:'01',label:'Janeiro'},{value:'02',label:'Fevereiro'},{value:'03',label:'Março'},{value:'04',label:'Abril'},{value:'05',label:'Maio'},{value:'06',label:'Junho'},{value:'07',label:'Julho'},{value:'08',label:'Agosto'},{value:'09',label:'Setembro'},{value:'10',label:'Outubro'},{value:'11',label:'Novembro'},{value:'12',label:'Dezembro'}]} /><Input label="Ano" name="year" type="number" value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Ex: 2026" /></div>)}
         
@@ -1236,6 +1271,20 @@ function DashboardApp({ userProfile }) {
           <>{currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'bills' && renderBills()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}</>
         )}
       </main>
+
+      {/* MODAL DE ALERTA URGENTE */}
+      {showUrgentAlert && (
+         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowUrgentAlert(false)}></div>
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6 text-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100 text-red-500"><AlertTriangle size={32} /></div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Contas Pendentes!</h3>
+              <p className="text-slate-600 mb-6">Você tem <b>{urgentBillsCount}</b> conta(s) a vencer hoje ou atrasada(s). Não se esqueça de dar a baixa!</p>
+              <Button onClick={() => { setShowUrgentAlert(false); setCurrentView('bills'); }} className="w-full">Ver Contas Agora</Button>
+              <button onClick={() => setShowUrgentAlert(false)} className="mt-4 text-sm font-bold text-slate-500 hover:text-slate-700">Lembrar mais tarde</button>
+            </div>
+         </div>
+      )}
 
       {/* MODAL DE LANÇAMENTO */}
       {isModalOpen && (
