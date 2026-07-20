@@ -26,6 +26,7 @@ const IconWrapper = ({ name, size = 24, className = '' }) => (
   <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>{name}</span>
 );
 
+// Basic Icons
 const Home = (p) => <IconWrapper name="home" {...p} />;
 const ArrowUpCircle = (p) => <IconWrapper name="arrow_circle_up" {...p} />;
 const ArrowDownCircle = (p) => <IconWrapper name="arrow_circle_down" {...p} />;
@@ -53,7 +54,6 @@ const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
 const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 const People = (p) => <IconWrapper name="group" {...p} />;
-const PictureAsPdf = (p) => <IconWrapper name="picture_as_pdf" {...p} />;
 const Building = (p) => <IconWrapper name="business" {...p} />;
 
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
@@ -245,7 +245,7 @@ function DashboardApp({ userProfile }) {
 
   const [transactions, setTransactions] = useState([]);
   const [bills, setBills] = useState([]); 
-  const [payroll, setPayroll] = useState([]); // NOVO ESTADO: Folha de Pagamento
+  const [payroll, setPayroll] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
 
   // Multi-Cidades
@@ -275,9 +275,10 @@ function DashboardApp({ userProfile }) {
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: 'Geral' });
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
-  // NOVO: Modal da Folha de Pagamento
+  // Modal da Folha de Pagamento - Smart Dropdown Added
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
   const [payrollFormData, setPayrollFormData] = useState({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: 'Geral', paymentMethod: PAYMENT_METHODS[0] });
+  const [isNewEmployee, setIsNewEmployee] = useState(false);
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
@@ -306,11 +307,14 @@ function DashboardApp({ userProfile }) {
     const unsubCat = onSnapshot(catRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            
+            // SMART DATA MIGRATION
             if (data.citiesList && data.categoriesByCity) {
                 setCitiesList(data.citiesList);
                 setCategoriesByCity(data.categoriesByCity);
                 if (!data.citiesList.includes(activeCityManager)) setActiveCityManager(data.citiesList[0] || 'Geral');
             } else {
+                // If old format exists, migrate it to the new 'Geral' structure.
                 const defaultCity = 'Geral';
                 const oldIncome = data.income || ['Serviço', 'Venda', 'Outros'];
                 const oldExpense = data.expense || ['Alimentação', 'Moradia', 'Transporte', 'Outros'];
@@ -318,6 +322,7 @@ function DashboardApp({ userProfile }) {
                 setCitiesList(newData.citiesList);
                 setCategoriesByCity(newData.categoriesByCity);
                 setActiveCityManager(defaultCity);
+                // Save migrated data to db immediately to ensure persistence.
                 setDoc(catRef, newData, { merge: true });
             }
         } else {
@@ -442,7 +447,6 @@ function DashboardApp({ userProfile }) {
             const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId);
             await setDoc(billRef, { status: 'pending', paymentDate: null, paidAmount: null }, { merge: true });
         }
-        // Se deletou transação de folha diretamente, deletar a folha origem também
         if (id.startsWith('pay_')) {
             const payrollId = id.replace('pay_', '');
             await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', payrollId));
@@ -520,9 +524,31 @@ function DashboardApp({ userProfile }) {
      setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
   };
 
+  const uniqueEmployeesList = useMemo(() => {
+      const map = new Map();
+      const sorted = [...payroll].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      sorted.forEach(p => {
+          if (!map.has(p.employeeName)) {
+              map.set(p.employeeName, p.role);
+          }
+      });
+      return Array.from(map.keys()).sort();
+  }, [payroll]);
+
   const handleOpenPayrollModal = () => {
       const defaultCity = citiesList[0] || 'Geral';
-      setPayrollFormData({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: defaultCity, paymentMethod: PAYMENT_METHODS[0] });
+      const firstEmp = uniqueEmployeesList.length > 0 ? uniqueEmployeesList[0] : '';
+      const firstRole = firstEmp ? (payroll.find(p => p.employeeName === firstEmp)?.role || '') : '';
+      
+      setPayrollFormData({ 
+          employeeName: firstEmp, 
+          role: firstRole, 
+          amount: '', 
+          date: new Date().toISOString().split('T')[0], 
+          city: defaultCity, 
+          paymentMethod: PAYMENT_METHODS[0] 
+      });
+      setIsNewEmployee(uniqueEmployeesList.length === 0);
       setIsPayrollModalOpen(true);
   };
 
@@ -544,10 +570,8 @@ function DashboardApp({ userProfile }) {
           createdAt: new Date().toISOString()
       };
 
-      // Salva no banco de dados da Folha
       await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', payrollId), payrollData);
 
-      // Injeta AUTOMATICAMENTE como despesa no Caixa Real (Transactions)
       const txData = {
           amount: finalAmount,
           type: 'expense',
@@ -555,7 +579,7 @@ function DashboardApp({ userProfile }) {
           category: `Folha: ${payrollFormData.employeeName}`,
           paymentMethod: payrollFormData.paymentMethod,
           city: payrollFormData.city,
-          originPayrollId: payrollId, // Vínculo para apagar junto
+          originPayrollId: payrollId,
           updatedAt: new Date().toISOString()
       };
       await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', `pay_${payrollId}`), txData);
@@ -564,7 +588,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const requestDeletePayroll = (id) => {
-      openConfirm('Excluir Folha', 'Tem certeza que deseja excluir o pagamento deste funcionário? O valor sairá do seu caixa e o DRE será atualizado.', async () => {
+      openConfirm('Excluir Folha', 'Tem certeza que deseja excluir o pagamento deste funcionário? O valor sairá do seu caixa.', async () => {
           await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', id));
           await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', `pay_${id}`));
           closeConfirm();
@@ -1470,7 +1494,45 @@ function DashboardApp({ userProfile }) {
              </div>
              <div className="p-6">
                 <form onSubmit={handleSavePayroll}>
-                  <Input label="Nome do Funcionário" name="employeeName" value={payrollFormData.employeeName} onChange={e => setPayrollFormData({...payrollFormData, employeeName: e.target.value})} placeholder="Ex: João Silva" required />
+                  {!isNewEmployee && uniqueEmployeesList.length > 0 ? (
+                      <div className="flex flex-col gap-1.5 mb-4 w-full">
+                          <label className="text-sm font-medium text-slate-700">Selecionar Funcionário</label>
+                          <select 
+                              value={payrollFormData.employeeName} 
+                              onChange={(e) => {
+                                  if (e.target.value === 'NEW') {
+                                      setIsNewEmployee(true);
+                                      setPayrollFormData({...payrollFormData, employeeName: '', role: ''});
+                                  } else {
+                                      const pastEmp = payroll.find(p => p.employeeName === e.target.value);
+                                      setPayrollFormData({...payrollFormData, employeeName: e.target.value, role: pastEmp?.role || ''});
+                                  }
+                              }}
+                              className="border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50 focus:bg-white text-slate-800 appearance-none"
+                              required
+                          >
+                              {uniqueEmployeesList.map(emp => <option key={emp} value={emp}>{emp}</option>)}
+                              <option value="NEW" className="font-bold text-blue-600">+ Cadastrar Novo Funcionário...</option>
+                          </select>
+                      </div>
+                  ) : (
+                      <div className="flex flex-col gap-1.5 mb-4 w-full animate-in fade-in duration-300">
+                          <div className="flex justify-between items-center">
+                              <label className="text-sm font-medium text-slate-700">Nome do Novo Funcionário</label>
+                              {uniqueEmployeesList.length > 0 && (
+                                  <button type="button" onClick={() => {
+                                      setIsNewEmployee(false);
+                                      const firstEmp = uniqueEmployeesList[0];
+                                      setPayrollFormData({...payrollFormData, employeeName: firstEmp, role: payroll.find(p=>p.employeeName===firstEmp)?.role || ''});
+                                  }} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                                      ← Escolher Existente
+                                  </button>
+                              )}
+                          </div>
+                          <input type="text" name="employeeName" value={payrollFormData.employeeName} onChange={e => setPayrollFormData({...payrollFormData, employeeName: e.target.value})} placeholder="Ex: João Silva" required className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50 focus:bg-white text-slate-800" />
+                      </div>
+                  )}
+
                   <Input label="Cargo / Função (Opcional)" name="role" value={payrollFormData.role} onChange={e => setPayrollFormData({...payrollFormData, role: e.target.value})} placeholder="Ex: Vendedor" />
                   
                   <Select label="Cidade / Filial" name="city" value={payrollFormData.city} onChange={e => setPayrollFormData({...payrollFormData, city: e.target.value})} required options={citiesList} />
