@@ -54,6 +54,7 @@ const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 const People = (p) => <IconWrapper name="group" {...p} />;
 const PictureAsPdf = (p) => <IconWrapper name="picture_as_pdf" {...p} />;
+const Building = (p) => <IconWrapper name="business" {...p} />;
 
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
@@ -367,8 +368,11 @@ function DashboardApp({ userProfile }) {
   }, [bills, todayStr]);
 
   useEffect(() => {
-    if (urgentBillsCount > 0) setShowUrgentAlert(true);
-  }, [urgentBillsCount]);
+    if (urgentBillsCount > 0 && !sessionStorage.getItem(`urgentAlertShown_${userProfile.uid}`)) {
+      setShowUrgentAlert(true);
+      sessionStorage.setItem(`urgentAlertShown_${userProfile.uid}`, 'true');
+    }
+  }, [urgentBillsCount, userProfile.uid]);
 
   const handleLogout = () => openConfirm('Sair do Sistema', 'Tem a certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
@@ -516,7 +520,6 @@ function DashboardApp({ userProfile }) {
      setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
   };
 
-  // --- LÓGICA DA FOLHA DE PAGAMENTO (NOVO) ---
   const handleOpenPayrollModal = () => {
       const defaultCity = citiesList[0] || 'Geral';
       setPayrollFormData({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: defaultCity, paymentMethod: PAYMENT_METHODS[0] });
@@ -851,7 +854,6 @@ function DashboardApp({ userProfile }) {
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
-  // GERADOR DE RELATÓRIO DE FOLHA (Nativo PDF/Print)
   const handleExportPayrollPDF = () => {
     if (filteredPayroll.length === 0) return;
     
@@ -933,7 +935,6 @@ function DashboardApp({ userProfile }) {
     printWindow.document.write(htmlContent);
     printWindow.document.close();
     printWindow.focus();
-    // Um pequeno delay para garantir que os estilos são aplicados antes da janela de impressão abrir
     setTimeout(() => {
       printWindow.print();
     }, 300);
@@ -1490,7 +1491,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* NOVO: Modal Folha de Pagamento */}
       {isPayrollModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsPayrollModalOpen(false)}></div>
