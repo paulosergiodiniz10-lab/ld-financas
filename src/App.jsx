@@ -8,7 +8,6 @@ import {
   getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot 
 } from "firebase/firestore";
 
-// --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyDlnaN0rfER6AAOBYJJ_uvsZN5LhtnR08k",
   authDomain: "ld-financas.firebaseapp.com",
@@ -23,7 +22,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const APP_ID = 'ld-financas';
 
-// --- ÍCONES (Material Symbols) ---
 const IconWrapper = ({ name, size = 24, className = '' }) => (
   <span className={`material-symbols-outlined ${className}`} style={{ fontSize: size }}>{name}</span>
 );
@@ -54,14 +52,12 @@ const Lock = (p) => <IconWrapper name="lock" {...p} />;
 const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
 const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
-const MapPin = (p) => <IconWrapper name="location_on" {...p} />;
-const Building = (p) => <IconWrapper name="domain" {...p} />;
+const People = (p) => <IconWrapper name="group" {...p} />;
+const PictureAsPdf = (p) => <IconWrapper name="picture_as_pdf" {...p} />;
 
-// --- CONFIGURAÇÕES DO SISTEMA ---
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
 
-// --- UTILITÁRIOS ---
 const formatNumber = (value) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
 const formatDate = (dateString) => {
   if (!dateString) return '';
@@ -69,7 +65,6 @@ const formatDate = (dateString) => {
   return `${day}/${month}/${year}`;
 };
 
-// --- COMPONENTES BÁSICOS ---
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden ${className}`}>{children}</div>
 );
@@ -121,7 +116,6 @@ const Select = ({ label, name, value, onChange, options, required = false }) => 
   </div>
 );
 
-// --- TELA DE LOGIN E CADASTRO REAL ---
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -144,8 +138,7 @@ const Auth = () => {
       } else {
         const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const user = userCred.user;
-        const tzDate = new Date();
-        const today = `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
+        const today = new Date().toISOString().split('T')[0];
         
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), {
           name: formData.name || 'Novo Utilizador',
@@ -244,20 +237,17 @@ const Auth = () => {
   );
 }
 
-// --- PAINEL PRINCIPAL (DASHBOARD REAL) ---
 function DashboardApp({ userProfile }) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // SISTEMA DE ALERTA REFORMULADO
   const [showUrgentAlert, setShowUrgentAlert] = useState(false);
-  const [alertFired, setAlertFired] = useState(false); 
 
   const [transactions, setTransactions] = useState([]);
   const [bills, setBills] = useState([]); 
+  const [payroll, setPayroll] = useState([]); // NOVO ESTADO: Folha de Pagamento
   const [adminUsers, setAdminUsers] = useState([]);
 
-  // SISTEMA MULTI-CIDADES
+  // Multi-Cidades
   const [citiesList, setCitiesList] = useState(['Geral']);
   const [categoriesByCity, setCategoriesByCity] = useState({ 'Geral': { income: ['Outros'], expense: ['Outros'] } });
   
@@ -277,14 +267,16 @@ function DashboardApp({ userProfile }) {
   
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
   const [cityModal, setCityModal] = useState({ isOpen: false, originalName: '', currentName: '' });
-  
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
   
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: 'Geral' });
-  
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
+
+  // NOVO: Modal da Folha de Pagamento
+  const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
+  const [payrollFormData, setPayrollFormData] = useState({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: 'Geral', paymentMethod: PAYMENT_METHODS[0] });
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
@@ -306,6 +298,9 @@ function DashboardApp({ userProfile }) {
     const billsRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills');
     const unsubBills = onSnapshot(billsRef, (snapshot) => { setBills(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); });
 
+    const payrollRef = collection(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll');
+    const unsubPayroll = onSnapshot(payrollRef, (snapshot) => { setPayroll(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); });
+
     const catRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories');
     const unsubCat = onSnapshot(catRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -318,12 +313,7 @@ function DashboardApp({ userProfile }) {
                 const defaultCity = 'Geral';
                 const oldIncome = data.income || ['Serviço', 'Venda', 'Outros'];
                 const oldExpense = data.expense || ['Alimentação', 'Moradia', 'Transporte', 'Outros'];
-                
-                const newData = {
-                    citiesList: [defaultCity],
-                    categoriesByCity: { [defaultCity]: { income: oldIncome, expense: oldExpense } }
-                };
-                
+                const newData = { citiesList: [defaultCity], categoriesByCity: { [defaultCity]: { income: oldIncome, expense: oldExpense } } };
                 setCitiesList(newData.citiesList);
                 setCategoriesByCity(newData.categoriesByCity);
                 setActiveCityManager(defaultCity);
@@ -331,10 +321,7 @@ function DashboardApp({ userProfile }) {
             }
         } else {
             const defaultCity = 'Geral';
-            const initialData = {
-                citiesList: [defaultCity],
-                categoriesByCity: { [defaultCity]: { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] } }
-            };
+            const initialData = { citiesList: [defaultCity], categoriesByCity: { [defaultCity]: { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] } } };
             setDoc(catRef, initialData);
         }
     });
@@ -345,7 +332,6 @@ function DashboardApp({ userProfile }) {
         unsubUsers = onSnapshot(usersRef, (snapshot) => { 
             const tzDate = new Date();
             const today = `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
-            
             const fetchedUsers = snapshot.docs.map(d => {
                 let u = { uid: d.id, ...d.data() };
                 if (u.email !== ADMIN_EMAIL && u.plan !== 'Admin') {
@@ -368,10 +354,9 @@ function DashboardApp({ userProfile }) {
             setAdminUsers(fetchedUsers); 
         });
     }
-    return () => { unsubTx(); unsubBills(); unsubCat(); unsubUsers(); }
+    return () => { unsubTx(); unsubBills(); unsubPayroll(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
 
-  // Obter Data Local Segura (Evita erro de UTC virar meia noite no Brasil)
   const todayStr = useMemo(() => {
      const tzDate = new Date();
      return `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
@@ -381,13 +366,9 @@ function DashboardApp({ userProfile }) {
     return bills.filter(b => b.status === 'pending' && b.dueDate <= todayStr).length;
   }, [bills, todayStr]);
 
-  // ALERTA DISPARA 1 VEZ POR RECARREGAMENTO/LOGIN
   useEffect(() => {
-    if (urgentBillsCount > 0 && !alertFired) {
-      setShowUrgentAlert(true);
-      setAlertFired(true); 
-    }
-  }, [urgentBillsCount, alertFired]);
+    if (urgentBillsCount > 0) setShowUrgentAlert(true);
+  }, [urgentBillsCount]);
 
   const handleLogout = () => openConfirm('Sair do Sistema', 'Tem a certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
@@ -452,18 +433,22 @@ function DashboardApp({ userProfile }) {
     openConfirm('Excluir Lançamento', 'Tem a certeza que deseja excluir? Isto afetará o seu saldo.', async () => {
         const txToDelete = transactions.find(t => t.id === id);
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
+        
         if (txToDelete && txToDelete.originBillId) {
             const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId);
             await setDoc(billRef, { status: 'pending', paymentDate: null, paidAmount: null }, { merge: true });
         }
+        // Se deletou transação de folha diretamente, deletar a folha origem também
+        if (id.startsWith('pay_')) {
+            const payrollId = id.replace('pay_', '');
+            await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', payrollId));
+        }
+
         closeConfirm();
     });
   };
 
   const handleOpenBillModal = () => {
-    if (userProfile.plan === 'Básico') {
-      openConfirm('Plano Pro Necessário', 'A criação de novos agendamentos é exclusiva do Plano Pro. Assine agora para prever o seu futuro!', () => { setCurrentView('plans'); closeConfirm(); }, true); return;
-    }
     const defaultCity = citiesList[0] || 'Geral';
     const defaultCats = categoriesByCity[defaultCity] || { income: ['Outros'], expense: ['Outros'] };
     setBillFormData({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: sortCategories(defaultCats.expense)[0] || '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: defaultCity });
@@ -531,6 +516,58 @@ function DashboardApp({ userProfile }) {
      setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
   };
 
+  // --- LÓGICA DA FOLHA DE PAGAMENTO (NOVO) ---
+  const handleOpenPayrollModal = () => {
+      const defaultCity = citiesList[0] || 'Geral';
+      setPayrollFormData({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: defaultCity, paymentMethod: PAYMENT_METHODS[0] });
+      setIsPayrollModalOpen(true);
+  };
+
+  const handleSavePayroll = async (e) => {
+      e.preventDefault();
+      let amountStr = payrollFormData.amount.toString().trim().replace(/[^\d.,]/g, '');
+      if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
+      let finalAmount = Math.round((parseFloat(amountStr) || 0) * 100) / 100;
+
+      const payrollId = Date.now().toString();
+      
+      const payrollData = {
+          employeeName: payrollFormData.employeeName,
+          role: payrollFormData.role,
+          amount: finalAmount,
+          date: payrollFormData.date,
+          city: payrollFormData.city,
+          paymentMethod: payrollFormData.paymentMethod,
+          createdAt: new Date().toISOString()
+      };
+
+      // Salva no banco de dados da Folha
+      await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', payrollId), payrollData);
+
+      // Injeta AUTOMATICAMENTE como despesa no Caixa Real (Transactions)
+      const txData = {
+          amount: finalAmount,
+          type: 'expense',
+          date: payrollFormData.date,
+          category: `Folha: ${payrollFormData.employeeName}`,
+          paymentMethod: payrollFormData.paymentMethod,
+          city: payrollFormData.city,
+          originPayrollId: payrollId, // Vínculo para apagar junto
+          updatedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', `pay_${payrollId}`), txData);
+
+      setIsPayrollModalOpen(false);
+  };
+
+  const requestDeletePayroll = (id) => {
+      openConfirm('Excluir Folha', 'Tem certeza que deseja excluir o pagamento deste funcionário? O valor sairá do seu caixa e o DRE será atualizado.', async () => {
+          await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', id));
+          await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', `pay_${id}`));
+          closeConfirm();
+      });
+  };
+
   const handleSaveCity = async (e) => {
       e.preventDefault();
       const trimmed = cityModal.currentName.trim();
@@ -572,12 +609,7 @@ function DashboardApp({ userProfile }) {
   };
 
   const handleOpenCategoryModal = (type, categoryName = null) => {
-      setCategoryModal({ 
-          isOpen: true, 
-          type: type, 
-          originalName: categoryName || '', 
-          currentName: categoryName || '' 
-      });
+      setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
   };
 
   const handleSaveCategory = async (e) => {
@@ -670,6 +702,12 @@ function DashboardApp({ userProfile }) {
     if (filterType !== 'all') filtered = filtered.filter(b => b.type === filterType);
     return filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()); 
   }, [bills, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterType, filterCity]);
+
+  const filteredPayroll = useMemo(() => {
+    let filtered = filterDataByPeriod(payroll, 'date');
+    if (filterCity !== 'all') filtered = filtered.filter(p => (p.city || 'Geral') === filterCity);
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
+  }, [payroll, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterCity]);
 
   const usedCategoriesInPeriod = useMemo(() => sortCategories(Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean)), [filteredTransactions]);
 
@@ -769,7 +807,6 @@ function DashboardApp({ userProfile }) {
               <tr><td colspan="6" class="header">RELATÓRIO DE PREVISÕES (CONTAS A PAGAR E RECEBER)</td></tr>
               <tr><td colspan="6" class="sub-header">Titular: ${userProfile?.name} | Cidade/Filtro: ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | Período: ${periodName}</td></tr>
               <tr><td colspan="6"></td></tr>
-              
               <tr><td colspan="6" class="section-title pending-title">AGENDAMENTOS PENDENTES</td></tr>
               <tr class="sub-header">
                 <td>Status</td><td>Tipo</td><td>Data Vencimento</td><td>Cidade</td><td>Categoria / Descrição</td><td class="text-right">Valor Previsto</td>
@@ -783,16 +820,7 @@ function DashboardApp({ userProfile }) {
             const typeStr = bill.type === 'income' ? 'A Receber' : 'A Pagar';
             const valClass = bill.type === 'income' ? 'text-green' : 'text-red';
             const valPrefix = bill.type === 'income' ? '+' : '-';
-            excelHTML += `
-              <tr>
-                <td class="font-bold">Pendente</td>
-                <td>${typeStr}</td>
-                <td>${formatDate(bill.dueDate)}</td>
-                <td>${bill.city || 'Geral'}</td>
-                <td>${bill.category || '-'}</td>
-                <td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.amount)}</td>
-              </tr>
-            `;
+            excelHTML += `<tr><td class="font-bold">Pendente</td><td>${typeStr}</td><td>${formatDate(bill.dueDate)}</td><td>${bill.city || 'Geral'}</td><td>${bill.category || '-'}</td><td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.amount)}</td></tr>`;
         });
     }
 
@@ -811,16 +839,7 @@ function DashboardApp({ userProfile }) {
             const typeStr = bill.type === 'income' ? 'Recebido' : 'Pago';
             const valClass = bill.type === 'income' ? 'text-green' : 'text-red';
             const valPrefix = bill.type === 'income' ? '+' : '-';
-            excelHTML += `
-              <tr>
-                <td class="font-bold text-green">Baixado</td>
-                <td>${typeStr}</td>
-                <td>${formatDate(bill.paymentDate)}</td>
-                <td>${bill.city || 'Geral'}</td>
-                <td><del>${bill.category || '-'}</del></td>
-                <td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.paidAmount)}</td>
-              </tr>
-            `;
+            excelHTML += `<tr><td class="font-bold text-green">Baixado</td><td>${typeStr}</td><td>${formatDate(bill.paymentDate)}</td><td>${bill.city || 'Geral'}</td><td><del>${bill.category || '-'}</del></td><td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.paidAmount)}</td></tr>`;
         });
     }
 
@@ -830,6 +849,94 @@ function DashboardApp({ userProfile }) {
     const link = document.createElement("a"); link.href = url;
     link.download = `Previsoes_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+  };
+
+  // GERADOR DE RELATÓRIO DE FOLHA (Nativo PDF/Print)
+  const handleExportPayrollPDF = () => {
+    if (filteredPayroll.length === 0) return;
+    
+    const total = filteredPayroll.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    
+    let periodName = filterPeriod;
+    if (filterPeriod === 'specific_month') periodName = `Mês ${selectedMonth}/${selectedYear}`;
+    if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
+    if (filterPeriod === 'month') periodName = 'Mês Atual';
+
+    const printWindow = window.open('', '_blank');
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <title>Folha de Pagamento - ${filterCity}</title>
+          <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #1e293b; line-height: 1.5; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
+            .header h2 { margin: 0 0 10px 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+            .header p { margin: 0; color: #64748b; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+            th, td { border: 1px solid #cbd5e1; padding: 12px; text-align: left; }
+            th { background-color: #f8fafc; font-weight: bold; color: #334155; text-transform: uppercase; font-size: 12px; }
+            tr:nth-child(even) { background-color: #f8fafc; }
+            .amount { text-align: right; font-weight: bold; color: #ef4444; }
+            .total-row { background-color: #f1f5f9 !important; font-weight: bold; font-size: 15px; }
+            .total-row td { text-align: right; border-top: 2px solid #94a3b8; }
+            .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; }
+            @media print {
+              @page { margin: 15mm; size: A4 portrait; }
+              body { padding: 0; }
+              .total-row { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; }
+              th { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>RELATÓRIO DE FOLHA DE PAGAMENTO</h2>
+            <p><strong>Empresa:</strong> ${userProfile?.name}</p>
+            <p><strong>Cidade/Filtro:</strong> ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | <strong>Período:</strong> ${periodName}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Funcionário</th>
+                <th>Cargo / Função</th>
+                <th>Cidade / Filial</th>
+                <th>Forma de Pagto</th>
+                <th style="text-align: right;">Valor Pago</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredPayroll.map(p => `
+                <tr>
+                  <td>${formatDate(p.date)}</td>
+                  <td>${p.employeeName}</td>
+                  <td>${p.role || '-'}</td>
+                  <td>${p.city || 'Geral'}</td>
+                  <td>${p.paymentMethod}</td>
+                  <td class="amount">R$ ${formatNumber(p.amount)}</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td colspan="5">TOTAL GASTO COM A FOLHA</td>
+                <td style="color: #ef4444;">R$ ${formatNumber(total)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer">
+            <p>Relatório gerado pelo sistema LD Finanças SaaS em ${formatDate(new Date().toISOString().split('T')[0])}</p>
+          </div>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    // Um pequeno delay para garantir que os estilos são aplicados antes da janela de impressão abrir
+    setTimeout(() => {
+      printWindow.print();
+    }, 300);
   };
 
   const renderFilterBar = () => (
@@ -873,6 +980,23 @@ function DashboardApp({ userProfile }) {
     </div>
   );
 
+  const renderFilterExtras = () => (
+    <>
+      {filterPeriod === 'custom' && (
+         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in">
+           <Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} />
+           <Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} />
+         </div>
+      )}
+      {filterPeriod === 'specific_month' && (
+         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in">
+           <Select label="Mês" name="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} options={[{value:'01',label:'Janeiro'},{value:'02',label:'Fevereiro'},{value:'03',label:'Março'},{value:'04',label:'Abril'},{value:'05',label:'Maio'},{value:'06',label:'Junho'},{value:'07',label:'Julho'},{value:'08',label:'Agosto'},{value:'09',label:'Setembro'},{value:'10',label:'Outubro'},{value:'11',label:'Novembro'},{value:'12',label:'Dezembro'}]} />
+           <Input label="Ano" name="year" type="number" value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Ex: 2026" />
+         </div>
+      )}
+    </>
+  );
+
   const renderDashboard = () => {
     const totals = filteredTransactions.reduce((acc, curr) => {
       const val = parseFloat(curr.amount) || 0;
@@ -888,8 +1012,7 @@ function DashboardApp({ userProfile }) {
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2><Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar DRE (Excel)</Button></header>
         {renderFilterBar()}
-        {filterPeriod === 'custom' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6"><Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} /><Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} /></div>)}
-        {filterPeriod === 'specific_month' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6"><Select label="Mês" name="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} options={[{value:'01',label:'Janeiro'},{value:'02',label:'Fevereiro'},{value:'03',label:'Março'},{value:'04',label:'Abril'},{value:'05',label:'Maio'},{value:'06',label:'Junho'},{value:'07',label:'Julho'},{value:'08',label:'Agosto'},{value:'09',label:'Setembro'},{value:'10',label:'Outubro'},{value:'11',label:'Novembro'},{value:'12',label:'Dezembro'}]} /><Input label="Ano" name="year" type="number" value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Ex: 2026" /></div>)}
+        {renderFilterExtras()}
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-6 rounded-2xl shadow-md text-white bg-[#000066]"><p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p><h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3></div>
@@ -949,8 +1072,7 @@ function DashboardApp({ userProfile }) {
         <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200" icon={Download}>Baixar DRE</Button><Button onClick={() => handleOpenModal()} icon={Plus}>Novo Lançamento</Button></div>
       </header>
       {renderFilterBar()}
-      {filterPeriod === 'custom' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6"><Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} /><Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} /></div>)}
-      {filterPeriod === 'specific_month' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6"><Select label="Mês" name="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} options={[{value:'01',label:'Janeiro'},{value:'02',label:'Fevereiro'},{value:'03',label:'Março'},{value:'04',label:'Abril'},{value:'05',label:'Maio'},{value:'06',label:'Junho'},{value:'07',label:'Julho'},{value:'08',label:'Agosto'},{value:'09',label:'Setembro'},{value:'10',label:'Outubro'},{value:'11',label:'Novembro'},{value:'12',label:'Dezembro'}]} /><Input label="Ano" name="year" type="number" value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Ex: 2026" /></div>)}
+      {renderFilterExtras()}
       
       <div className="space-y-3">
           {filteredTransactions.map(tx => (
@@ -960,7 +1082,7 @@ function DashboardApp({ userProfile }) {
                   <p className="font-bold text-slate-800 text-base truncate">{tx.category}</p>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                     <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> {formatDate(tx.date)}</p>
-                    <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><MapPin size={12}/> {tx.city || 'Geral'}</span>
+                    <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><Building size={12}/> {tx.city || 'Geral'}</span>
                     <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><CardIcon size={12}/> {tx.paymentMethod}</span>
                   </div>
                 </div>
@@ -987,15 +1109,12 @@ function DashboardApp({ userProfile }) {
           <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Contas a Pagar/Receber</h2><p className="text-slate-500 text-sm mt-1">Ao dar baixa, o valor entra no caixa real.</p></div>
           <div className="flex gap-2 w-full sm:w-auto">
             <Button onClick={handleExportBillsCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200" icon={Download}>Baixar Previsões</Button>
-            <Button onClick={handleOpenBillModal} icon={userProfile.plan === 'Básico' ? Lock : Plus} className={userProfile.plan === 'Básico' ? 'bg-slate-300 text-slate-700' : ''}>{userProfile.plan === 'Básico' ? 'Plano Pro' : 'Agendar'}</Button>
+            <Button onClick={handleOpenBillModal} icon={Plus}>Agendar</Button>
           </div>
         </header>
         
         {renderFilterBar()}
-        
-        {/* CORREÇÃO DAS CAIXAS DE DATA NA TELA DE PREVISÕES */}
-        {filterPeriod === 'custom' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in"><Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} /><Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} /></div>)}
-        {filterPeriod === 'specific_month' && (<div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in"><Select label="Mês" name="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} options={[{value:'01',label:'Janeiro'},{value:'02',label:'Fevereiro'},{value:'03',label:'Março'},{value:'04',label:'Abril'},{value:'05',label:'Maio'},{value:'06',label:'Junho'},{value:'07',label:'Julho'},{value:'08',label:'Agosto'},{value:'09',label:'Setembro'},{value:'10',label:'Outubro'},{value:'11',label:'Novembro'},{value:'12',label:'Dezembro'}]} /><Input label="Ano" name="year" type="number" value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Ex: 2026" /></div>)}
+        {renderFilterExtras()}
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800"><p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Receipt size={14}/> Saldo Previsto</p><h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3></div>
@@ -1011,7 +1130,7 @@ function DashboardApp({ userProfile }) {
                  <Card key={bill.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 ${bill.type === 'income' ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
                    <div className="min-w-0 flex-1">
                      <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{bill.category} {isOverdue && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase">Atrasado</span>}</p>
-                     <p className="text-sm text-slate-500 flex items-center gap-2 mt-1"><span className="flex items-center gap-1"><Calendar size={14}/> {formatDate(bill.dueDate)}</span><span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md"><MapPin size={12}/> {bill.city || 'Geral'}</span></p>
+                     <p className="text-sm text-slate-500 flex items-center gap-2 mt-1"><span className="flex items-center gap-1"><Calendar size={14}/> {formatDate(bill.dueDate)}</span><span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md"><Building size={12}/> {bill.city || 'Geral'}</span></p>
                    </div>
                    <div className="flex items-center justify-between sm:justify-end gap-4">
                       <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.amount)}` : `-R$ ${formatNumber(bill.amount)}`}</div>
@@ -1020,6 +1139,7 @@ function DashboardApp({ userProfile }) {
                  </Card>
                )
             })}
+            {pendingBills.length === 0 && <div className="text-center py-8 text-slate-500 font-medium">Nenhuma conta pendente para o filtro selecionado.</div>}
             
             <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-2 mt-8 pt-6 border-t border-slate-200">Histórico de Baixas</h3>
             {filteredBills.filter(b => b.status === 'paid').map(bill => (
@@ -1037,6 +1157,71 @@ function DashboardApp({ userProfile }) {
         </div>
       </div>
     );
+  };
+
+  const renderPayroll = () => {
+      const totalPayroll = filteredPayroll.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+      const uniqueEmployeesCount = new Set(filteredPayroll.map(p => p.employeeName)).size;
+
+      return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+              <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                      <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Folha de Pagamento</h2>
+                      <p className="text-slate-500 text-sm mt-1">Gestão de salários. Ao lançar, reflete no Caixa Principal.</p>
+                  </div>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                      <Button onClick={handleExportPayrollPDF} variant="outline" className="bg-white text-slate-700 border-slate-200 hover:bg-slate-50" icon={PictureAsPdf}>Baixar Relatório (PDF)</Button>
+                      <Button onClick={handleOpenPayrollModal} icon={Plus}>Novo Pagamento</Button>
+                  </div>
+              </header>
+
+              {renderFilterBar()}
+              {renderFilterExtras()}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                  <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800">
+                      <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Wallet size={14}/> Total Gasto (Folha)</p>
+                      <h3 className="text-3xl font-black text-white">R$ {formatNumber(totalPayroll)}</h3>
+                  </div>
+                  <Card className="p-6 border-l-4 border-l-blue-500">
+                      <p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><People size={14}/> Funcionários Pagos</p>
+                      <h3 className="text-2xl font-bold text-blue-600">{uniqueEmployeesCount} <span className="text-sm text-slate-500 font-medium">pessoas</span></h3>
+                  </Card>
+              </div>
+
+              <div className="space-y-3">
+                  {filteredPayroll.map(pay => (
+                      <Card key={pay.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-l-slate-400 group hover:border-l-slate-600 transition-colors">
+                          <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-slate-100 text-slate-600 group-hover:bg-slate-200 transition-colors">
+                                  <People size={20}/>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-slate-800 text-base truncate">{pay.employeeName}</p>
+                                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
+                                      <span className="text-xs text-slate-500 font-bold">{pay.role || 'Sem Cargo'}</span>
+                                      <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> {formatDate(pay.date)}</p>
+                                      <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><Building size={12}/> {pay.city || 'Geral'}</span>
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="flex items-center justify-between sm:justify-end gap-4">
+                              <div className="font-bold text-lg text-slate-700">R$ {formatNumber(pay.amount)}</div>
+                              <div className="flex gap-2 shrink-0">
+                                  <button onClick={() => requestDeletePayroll(pay.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                              </div>
+                          </div>
+                      </Card>
+                  ))}
+                  {filteredPayroll.length === 0 && (
+                      <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500 font-medium">
+                          Nenhum pagamento de folha registado neste período/cidade.
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
   };
 
   const renderCategories = () => {
@@ -1114,6 +1299,54 @@ function DashboardApp({ userProfile }) {
     );
   };
 
+  const renderPlans = () => {
+    const isAdmin = userProfile.email === ADMIN_EMAIL;
+    if (isAdmin) {
+      return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2></header>
+          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-400 bg-amber-50/30">
+            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6">
+                <div><p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-base">workspace_premium</span> Plano Atual</p><h3 className="text-3xl font-black text-slate-800">Admin</h3></div>
+                <div className="text-right"><span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span><p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p></div>
+            </div>
+            <div className="text-center py-8"><div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div><h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4><p className="text-slate-600">Acesso ilimitado a todo o sistema.</p></div>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2></header>
+        <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
+              <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
+              <div className="text-right"><span className={`inline-block font-bold px-3 py-1 rounded-full text-sm ${userProfile.daysRemaining > 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.daysRemaining > 0 ? 'Ativo' : 'Expirado'}</span><p className="text-sm text-slate-500 mt-2 font-medium">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias restantes`}</p></div>
+          </div>
+          <div className="space-y-6">
+              <h4 className="font-bold text-slate-800 text-lg">Conheça as opções</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+                  {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
+                  <p className="text-slate-500 text-sm mb-6 flex-1">Lançamentos ilimitados diários e categorias personalizadas.</p>
+                  <Button variant="outline" className="w-full bg-white mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
+                </div>
+                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
+                  {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
+                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Completo</div>
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
+                  <p className="text-slate-500 text-sm mb-6 flex-1">Tudo do Básico + <b>Gestão de Contas a Pagar/Receber, Multi-Cidades e Folha de Pagamento</b>.</p>
+                  <Button className="w-full mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
+                </div>
+              </div>
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
   const renderSupport = () => (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto md:mx-0">
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Suporte e Ajuda</h2></header>
@@ -1134,68 +1367,6 @@ function DashboardApp({ userProfile }) {
       </div>
     </div>
   );
-
-  const renderPlans = () => {
-    const isAdmin = userProfile.email === ADMIN_EMAIL;
-
-    if (isAdmin) {
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2><p className="text-slate-500 mt-1">Gerencie a sua assinatura do LD Finanças.</p></header>
-          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-400 bg-amber-50/30">
-            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6">
-                <div>
-                  <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-base">workspace_premium</span> Plano Atual</p>
-                  <h3 className="text-3xl font-black text-slate-800">Admin</h3>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span>
-                  <p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p>
-                </div>
-            </div>
-            <div className="text-center py-8">
-               <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div>
-               <h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4>
-               <p className="text-slate-600">Tem acesso ilimitado e vitalício ao sistema, incluindo o painel de gestão de todos os clientes.</p>
-            </div>
-          </Card>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2><p className="text-slate-500 mt-1">Acompanhe os dias restantes da sua assinatura.</p></header>
-        <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-emerald-600">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
-              <div><p className="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-1">Plano Atual</p><h3 className="text-3xl font-black text-slate-800">{userProfile.plan}</h3></div>
-              <div className="text-right"><span className={`inline-block font-bold px-3 py-1 rounded-full text-sm ${userProfile.daysRemaining > 5 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{userProfile.daysRemaining > 0 ? 'Ativo' : 'Expirado'}</span><p className="text-sm text-slate-500 mt-2 font-medium">{userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias restantes`}</p></div>
-          </div>
-          <div className="space-y-6">
-              <h4 className="font-bold text-slate-800 text-lg">Conheça as opções</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
-                  {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
-                  <p className="text-slate-500 text-sm mb-6 flex-1">Lançamentos ilimitados diários e categorias personalizadas. Ideal para gestão rápida do seu caixa.</p>
-                  <Button variant="outline" className="w-full bg-white mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
-                </div>
-
-                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
-                  {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Completo</div>
-                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
-                  <p className="text-slate-500 text-sm mb-6 flex-1">Tudo do Básico + <b>Gestão de Contas a Pagar/Receber e Multi-Cidades (Escritórios)</b>.</p>
-                  <Button className="w-full mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
-                </div>
-
-              </div>
-          </div>
-        </Card>
-      </div>
-    );
-  };
 
   const renderAdmin = () => (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -1240,12 +1411,14 @@ function DashboardApp({ userProfile }) {
   return (
     <div className="min-h-screen bg-slate-50 md:flex font-sans text-slate-900">
       <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm"><div className="flex items-center gap-2 font-black text-xl text-slate-800 tracking-tight"><div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-sm">LD</div>FINANÇAS</div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600 bg-slate-50 rounded-xl">{isMobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}</button></div>
+      
       <aside className={`fixed md:sticky top-0 left-0 h-[100dvh] w-72 bg-white border-r border-slate-200 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-6 hidden md:flex items-center gap-2 font-black text-2xl text-slate-800 tracking-tight border-b border-slate-100"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS</div>
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
           <NavItem id="dashboard" icon={Home} label="Início" />
           <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
-          {(userProfile.plan !== 'Básico') && <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" badge={urgentBillsCount} />}
+          <NavItem id="payroll" icon={People} label="Folha de Pagamento" />
+          <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" badge={urgentBillsCount} />
           <NavItem id="categories" icon={Building} label="Cidades & Categorias" />
           <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
           <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
@@ -1268,11 +1441,21 @@ function DashboardApp({ userProfile }) {
              <div className="flex flex-col sm:flex-row gap-4 justify-center"><Button onClick={() => window.open('https://wa.me/5564981005505', '_blank')} icon={HelpCircle}>Suporte</Button><Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair</Button></div>
           </div>
         ) : (
-          <>{currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'bills' && renderBills()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}</>
+          <>
+            {currentView === 'dashboard' && renderDashboard()}
+            {currentView === 'transactions' && renderTransactions()}
+            {currentView === 'payroll' && renderPayroll()}
+            {currentView === 'bills' && renderBills()}
+            {currentView === 'categories' && renderCategories()}
+            {currentView === 'support' && renderSupport()}
+            {currentView === 'plans' && renderPlans()}
+            {currentView === 'tutorial' && renderTutorial()}
+            {currentView === 'admin' && renderAdmin()}
+          </>
         )}
       </main>
 
-      {/* MODAL DE ALERTA URGENTE */}
+      {}
       {showUrgentAlert && (
          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowUrgentAlert(false)}></div>
@@ -1286,7 +1469,6 @@ function DashboardApp({ userProfile }) {
          </div>
       )}
 
-      {/* MODAL DE LANÇAMENTO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
@@ -1295,12 +1477,9 @@ function DashboardApp({ userProfile }) {
              <div className="p-6">
                 <form onSubmit={handleSaveTransaction}>
                   <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${formData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500'}`}>Entrada (+)</button><button type="button" onClick={() => handleTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${formData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500'}`}>Saída (-)</button></div>
-                  
                   <Select label="Cidade/Escritório" name="city" value={formData.city} onChange={handleFormChange} required options={citiesList} />
-                  
                   <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? sortCategories((categoriesByCity[formData.city] || {}).income) : sortCategories((categoriesByCity[formData.city] || {}).expense)} />
                   {formData.category.toLowerCase().includes('outros') && <Input label="Descrição" name="customDescription" value={formData.customDescription} onChange={handleFormChange} placeholder="Ex: Feira..." required />}
-                  
                   <Input label="Valor (R$)" name="amount" type="text" inputMode="decimal" value={formData.amount} onChange={handleFormChange} placeholder="0,00" required />
                   <Select label="Forma de Pagamento" name="paymentMethod" value={formData.paymentMethod} onChange={handleFormChange} options={PAYMENT_METHODS} required />
                   <Input label="Data" name="date" type="date" value={formData.date} onChange={handleFormChange} required />
@@ -1311,7 +1490,36 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE CONTAS A PAGAR */}
+      {/* NOVO: Modal Folha de Pagamento */}
+      {isPayrollModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsPayrollModalOpen(false)}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex justify-between z-20">
+                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><People className="text-blue-500"/> Lançar Pagamento</h3>
+                 <button onClick={() => setIsPayrollModalOpen(false)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button>
+             </div>
+             <div className="p-6">
+                <form onSubmit={handleSavePayroll}>
+                  <Input label="Nome do Funcionário" name="employeeName" value={payrollFormData.employeeName} onChange={e => setPayrollFormData({...payrollFormData, employeeName: e.target.value})} placeholder="Ex: João Silva" required />
+                  <Input label="Cargo / Função (Opcional)" name="role" value={payrollFormData.role} onChange={e => setPayrollFormData({...payrollFormData, role: e.target.value})} placeholder="Ex: Vendedor" />
+                  
+                  <Select label="Cidade / Filial" name="city" value={payrollFormData.city} onChange={e => setPayrollFormData({...payrollFormData, city: e.target.value})} required options={citiesList} />
+                  
+                  <Input label="Valor Pago (R$)" name="amount" type="text" inputMode="decimal" value={payrollFormData.amount} onChange={e => setPayrollFormData({...payrollFormData, amount: e.target.value})} placeholder="0,00" required />
+                  <Select label="Forma de Pagamento" name="paymentMethod" value={payrollFormData.paymentMethod} onChange={e => setPayrollFormData({...payrollFormData, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
+                  <Input label="Data do Pagamento" name="date" type="date" value={payrollFormData.date} onChange={e => setPayrollFormData({...payrollFormData, date: e.target.value})} required />
+                  
+                  <div className="mt-8 flex gap-3">
+                      <button type="button" onClick={() => setIsPayrollModalOpen(false)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button>
+                      <button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm bg-blue-600 hover:bg-blue-700">Registrar Pagamento</button>
+                  </div>
+                </form>
+             </div>
+          </div>
+        </div>
+      )}
+
       {isBillModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBillModalOpen(false)}></div>
@@ -1334,7 +1542,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE CIDADES */}
       {cityModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCityModal({...cityModal, isOpen: false})}></div>
@@ -1348,7 +1555,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
       
-      {/* MODAL DE CATEGORIAS */}
       {categoryModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({...categoryModal, isOpen: false})}></div>
@@ -1362,7 +1568,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
       
-      {/* MODAL DE DAR BAIXA (SETTLE BILL) */}
       {settleModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModal({...settleModal, isOpen: false})}></div>
@@ -1383,7 +1588,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE EDIÇÃO DO ADMIN */}
       {adminEditModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
@@ -1404,7 +1608,6 @@ function DashboardApp({ userProfile }) {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO GENÉRICA */}
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
