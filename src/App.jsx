@@ -53,7 +53,8 @@ const LockOpen = (p) => <IconWrapper name="lock_open" {...p} />;
 const Receipt = (p) => <IconWrapper name="receipt_long" {...p} />;
 const CheckCircle = (p) => <IconWrapper name="check_circle" {...p} />;
 const People = (p) => <IconWrapper name="group" {...p} />;
-const Building = (p) => <IconWrapper name="apartment" {...p} />;
+const PictureAsPdf = (p) => <IconWrapper name="picture_as_pdf" {...p} />;
+const Building = (p) => <IconWrapper name="business" {...p} />;
 
 const ADMIN_EMAIL = "paulosergiodiniz20@gmail.com";
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Transferência Bancária', 'Boleto', 'Outros'];
@@ -139,7 +140,6 @@ const Auth = () => {
         const userCred = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const user = userCred.user;
         const today = new Date().toISOString().split('T')[0];
-        const createdAt = new Date().toISOString();
         
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), {
           name: formData.name || 'Novo Utilizador',
@@ -148,7 +148,7 @@ const Auth = () => {
           plan: formData.email === ADMIN_EMAIL ? 'Admin' : 'Free',
           daysRemaining: formData.email === ADMIN_EMAIL ? 999 : 30,
           status: 'Ativo',
-          createdAt: createdAt,
+          createdAt: new Date().toISOString(),
           lastDecrementDate: today
         });
       }
@@ -243,59 +243,52 @@ function DashboardApp({ userProfile }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUrgentAlert, setShowUrgentAlert] = useState(false);
 
-  // Estados dos Dados
   const [transactions, setTransactions] = useState([]);
   const [bills, setBills] = useState([]); 
-  const [payroll, setPayroll] = useState([]); // NOVO: Folha de pagamento
-  const [incomeCategories, setIncomeCategories] = useState(['Outros']);
-  const [expenseCategories, setExpenseCategories] = useState(['Outros']);
-  const [citiesList, setCitiesList] = useState(['Geral']);
+  const [payroll, setPayroll] = useState([]); // NOVO ESTADO: Folha de Pagamento
   const [adminUsers, setAdminUsers] = useState([]);
 
-  // Filtros Globais
+  // Multi-Cidades
+  const [citiesList, setCitiesList] = useState(['Geral']);
+  const [categoriesByCity, setCategoriesByCity] = useState({ 'Geral': { income: ['Outros'], expense: ['Outros'] } });
+  
+  const [activeCityManager, setActiveCityManager] = useState('Geral'); 
+  const [filterCity, setFilterCity] = useState('all'); 
   const [filterPeriod, setFilterPeriod] = useState('month'); 
   const [filterType, setFilterType] = useState('all'); 
   const [filterCategory, setFilterCategory] = useState('all');
-  const [filterCity, setFilterCity] = useState('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
   const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
-  // Modais e Formulários
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: '', customDescription: '', paymentMethod: PAYMENT_METHODS[0], city: 'Geral' });
   
   const [categoryModal, setCategoryModal] = useState({ isOpen: false, type: 'income', originalName: '', currentName: '' });
+  const [cityModal, setCityModal] = useState({ isOpen: false, originalName: '', currentName: '' });
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
   const [adminEditModal, setAdminEditModal] = useState({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
   
-  // Modal para Cidades
-  const [cityModal, setCityModal] = useState({ isOpen: false, currentName: '', originalName: '' });
-
-  // Modal para Contas a Pagar
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billFormData, setBillFormData] = useState({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: 'Geral' });
   const [settleModal, setSettleModal] = useState({ isOpen: false, bill: null, paymentDate: new Date().toISOString().split('T')[0], paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
 
-  // Modal para Folha de Pagamento
+  // NOVO: Modal da Folha de Pagamento
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
   const [payrollFormData, setPayrollFormData] = useState({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: 'Geral', paymentMethod: PAYMENT_METHODS[0] });
-  const [isNewEmployee, setIsNewEmployee] = useState(false);
 
   const openConfirm = (title, message, onConfirm, isAlert = false) => setConfirmDialog({ isOpen: true, title, message, onConfirm, isAlert });
   const closeConfirm = () => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, isAlert: false });
-
-  const sortCategories = (cats) => {
-    return [...cats].sort((a, b) => {
-      if (a.toLowerCase() === 'outros') return -1;
-      if (b.toLowerCase() === 'outros') return 1;
-      return a.localeCompare(b);
-    });
+  
+  const sortCategories = (cats) => { 
+    return [...(cats || [])].sort((a, b) => { 
+      if (a.toLowerCase() === 'outros') return -1; 
+      if (b.toLowerCase() === 'outros') return 1; 
+      return a.localeCompare(b); 
+    }); 
   };
-  const sortedIncomeCats = sortCategories(incomeCategories);
-  const sortedExpenseCats = sortCategories(expenseCategories);
 
   useEffect(() => {
     if (!userProfile?.uid) return;
@@ -313,19 +306,24 @@ function DashboardApp({ userProfile }) {
     const unsubCat = onSnapshot(catRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            setIncomeCategories(data.income || ['Outros']);
-            setExpenseCategories(data.expense || ['Outros']);
+            if (data.citiesList && data.categoriesByCity) {
+                setCitiesList(data.citiesList);
+                setCategoriesByCity(data.categoriesByCity);
+                if (!data.citiesList.includes(activeCityManager)) setActiveCityManager(data.citiesList[0] || 'Geral');
+            } else {
+                const defaultCity = 'Geral';
+                const oldIncome = data.income || ['Serviço', 'Venda', 'Outros'];
+                const oldExpense = data.expense || ['Alimentação', 'Moradia', 'Transporte', 'Outros'];
+                const newData = { citiesList: [defaultCity], categoriesByCity: { [defaultCity]: { income: oldIncome, expense: oldExpense } } };
+                setCitiesList(newData.citiesList);
+                setCategoriesByCity(newData.categoriesByCity);
+                setActiveCityManager(defaultCity);
+                setDoc(catRef, newData, { merge: true });
+            }
         } else {
-            setDoc(catRef, { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] });
-        }
-    });
-
-    const citiesRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'cities');
-    const unsubCities = onSnapshot(citiesRef, (docSnap) => {
-        if (docSnap.exists() && docSnap.data().list) {
-            setCitiesList(docSnap.data().list);
-        } else {
-            setDoc(citiesRef, { list: ['Geral'] });
+            const defaultCity = 'Geral';
+            const initialData = { citiesList: [defaultCity], categoriesByCity: { [defaultCity]: { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] } } };
+            setDoc(catRef, initialData);
         }
     });
 
@@ -333,43 +331,38 @@ function DashboardApp({ userProfile }) {
     if (userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin') {
         const usersRef = collection(db, 'artifacts', APP_ID, 'users');
         unsubUsers = onSnapshot(usersRef, (snapshot) => { 
-            const today = new Date().toISOString().split('T')[0];
+            const tzDate = new Date();
+            const today = `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
             const fetchedUsers = snapshot.docs.map(d => {
                 let u = { uid: d.id, ...d.data() };
                 if (u.email !== ADMIN_EMAIL && u.plan !== 'Admin') {
                     const lastCheck = u.lastDecrementDate || u.createdAt?.split('T')[0] || today;
-                    let needsDbUpdate = false;
-                    let updates = {};
-
+                    let needsDbUpdate = false; let updates = {};
                     if (u.daysRemaining > 0 && lastCheck !== today) {
                         const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
                         if (daysPassed > 0) {
                             u.daysRemaining = Math.max(0, u.daysRemaining - daysPassed);
                             u.lastDecrementDate = today;
-                            updates.daysRemaining = u.daysRemaining;
-                            updates.lastDecrementDate = today;
+                            updates.daysRemaining = u.daysRemaining; updates.lastDecrementDate = today;
                             needsDbUpdate = true;
                         }
                     }
-                    if (u.daysRemaining <= 0 && u.status !== 'Bloqueado') {
-                        u.status = 'Bloqueado';
-                        updates.status = 'Bloqueado';
-                        needsDbUpdate = true;
-                    }
-                    if (needsDbUpdate) {
-                        setDoc(doc(db, 'artifacts', APP_ID, 'users', u.uid), updates, { merge: true });
-                    }
+                    if (u.daysRemaining <= 0 && u.status !== 'Bloqueado') { u.status = 'Bloqueado'; updates.status = 'Bloqueado'; needsDbUpdate = true; }
+                    if (needsDbUpdate) setDoc(doc(db, 'artifacts', APP_ID, 'users', u.uid), updates, { merge: true });
                 }
                 return u;
             });
             setAdminUsers(fetchedUsers); 
         });
     }
-
-    return () => { unsubTx(); unsubBills(); unsubPayroll(); unsubCat(); unsubCities(); unsubUsers(); }
+    return () => { unsubTx(); unsubBills(); unsubPayroll(); unsubCat(); unsubUsers(); }
   }, [userProfile?.uid, userProfile?.plan, userProfile?.email]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = useMemo(() => {
+     const tzDate = new Date();
+     return `${tzDate.getFullYear()}-${String(tzDate.getMonth() + 1).padStart(2, '0')}-${String(tzDate.getDate()).padStart(2, '0')}`;
+  }, []);
+
   const urgentBillsCount = useMemo(() => {
     return bills.filter(b => b.status === 'pending' && b.dueDate <= todayStr).length;
   }, [bills, todayStr]);
@@ -384,26 +377,50 @@ function DashboardApp({ userProfile }) {
   const handleLogout = () => openConfirm('Sair do Sistema', 'Tem a certeza que deseja sair?', () => { signOut(auth); closeConfirm(); });
 
   const handleOpenModal = (transaction = null) => {
-    const defaultCity = filterCity !== 'all' ? filterCity : (citiesList[0] || 'Geral');
     if (transaction) {
       let cat = transaction.category; let customDesc = '';
       const match = cat.match(/^(.*) \((.*)\)$/);
       if (match && match[1].toLowerCase().includes('outros')) { cat = match[1]; customDesc = match[2]; }
-      setFormData({ amount: transaction.amount, type: transaction.type, date: transaction.date, category: cat, customDescription: customDesc, paymentMethod: transaction.paymentMethod, city: transaction.city || 'Geral' });
+      
+      const tCity = transaction.city || citiesList[0] || 'Geral';
+      setFormData({ amount: transaction.amount, type: transaction.type, date: transaction.date, category: cat, customDescription: customDesc, paymentMethod: transaction.paymentMethod, city: tCity });
       setEditingId(transaction.id);
     } else {
-      setFormData({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: sortedExpenseCats[0] || '', customDescription: '', paymentMethod: PAYMENT_METHODS[0], city: defaultCity });
+      const defaultCity = citiesList[0] || 'Geral';
+      const defaultCats = categoriesByCity[defaultCity] || { income: ['Outros'], expense: ['Outros'] };
+      setFormData({ amount: '', type: 'expense', date: new Date().toISOString().split('T')[0], category: sortCategories(defaultCats.expense)[0] || '', customDescription: '', paymentMethod: PAYMENT_METHODS[0], city: defaultCity });
       setEditingId(null);
     }
     setIsModalOpen(true);
   };
+  
   const handleCloseModal = () => { setIsModalOpen(false); setEditingId(null); };
-  const handleFormChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  const handleTypeToggle = (newType) => setFormData(prev => ({ ...prev, type: newType, category: newType === 'income' ? (sortedIncomeCats[0] || '') : (sortedExpenseCats[0] || ''), customDescription: '' }));
+  
+  const handleFormChange = (e) => {
+      const { name, value } = e.target;
+      setFormData(prev => {
+         let newData = { ...prev, [name]: value };
+         if (name === 'city') {
+             const catsForNewCity = categoriesByCity[value] || { income: ['Outros'], expense: ['Outros'] };
+             const catList = newData.type === 'income' ? catsForNewCity.income : catsForNewCity.expense;
+             newData.category = sortCategories(catList)[0] || '';
+             newData.customDescription = '';
+         }
+         return newData;
+      });
+  };
+
+  const handleTypeToggle = (newType) => {
+      setFormData(prev => {
+          const catsForCity = categoriesByCity[prev.city] || { income: ['Outros'], expense: ['Outros'] };
+          const newCatList = newType === 'income' ? catsForCity.income : catsForCity.expense;
+          return { ...prev, type: newType, category: sortCategories(newCatList)[0] || '', customDescription: '' };
+      });
+  };
 
   const handleSaveTransaction = async (e) => {
     e.preventDefault();
-    if (!formData.category || !formData.amount) return;
+    if (!formData.category || !formData.amount || !formData.city) return;
     let finalCategory = formData.category;
     if (formData.category.toLowerCase().includes('outros') && formData.customDescription.trim()) finalCategory = `${formData.category} (${formData.customDescription.trim()})`;
     
@@ -411,7 +428,7 @@ function DashboardApp({ userProfile }) {
     if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
     let finalAmount = Math.round((parseFloat(amountStr) || 0) * 100) / 100;
 
-    const newTx = { amount: finalAmount, type: formData.type, date: formData.date, category: finalCategory, paymentMethod: formData.paymentMethod, city: formData.city || 'Geral', updatedAt: new Date().toISOString() };
+    const newTx = { amount: finalAmount, type: formData.type, date: formData.date, category: finalCategory, paymentMethod: formData.paymentMethod, city: formData.city, updatedAt: new Date().toISOString() };
     await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', editingId || Date.now().toString()), newTx);
     handleCloseModal();
   };
@@ -420,50 +437,57 @@ function DashboardApp({ userProfile }) {
     openConfirm('Excluir Lançamento', 'Tem a certeza que deseja excluir? Isto afetará o seu saldo.', async () => {
         const txToDelete = transactions.find(t => t.id === id);
         await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id));
+        
         if (txToDelete && txToDelete.originBillId) {
             const billRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', txToDelete.originBillId);
             await setDoc(billRef, { status: 'pending', paymentDate: null, paidAmount: null }, { merge: true });
         }
-        if (txToDelete && txToDelete.originPayrollId) {
-            await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', txToDelete.originPayrollId));
+        // Se deletou transação de folha diretamente, deletar a folha origem também
+        if (id.startsWith('pay_')) {
+            const payrollId = id.replace('pay_', '');
+            await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', payrollId));
         }
+
         closeConfirm();
     });
   };
 
   const handleOpenBillModal = () => {
-    if (userProfile.plan === 'Básico') {
-      openConfirm('Plano Pro Necessário', 'A criação de novos agendamentos é exclusiva do Plano Pro. Assine agora para continuar a prever o seu futuro financeiro!', () => { setCurrentView('plans'); closeConfirm(); }, true);
-      return;
-    }
-    const defaultCity = filterCity !== 'all' ? filterCity : (citiesList[0] || 'Geral');
-    setBillFormData({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: sortedExpenseCats[0] || '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: defaultCity });
+    const defaultCity = citiesList[0] || 'Geral';
+    const defaultCats = categoriesByCity[defaultCity] || { income: ['Outros'], expense: ['Outros'] };
+    setBillFormData({ amount: '', type: 'expense', dueDate: new Date().toISOString().split('T')[0], category: sortCategories(defaultCats.expense)[0] || '', customDescription: '', isRecurring: false, recurrenceMonths: 1, city: defaultCity });
     setIsBillModalOpen(true);
   };
-  const handleBillFormChange = (e) => setBillFormData(prev => ({ ...prev, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  
+  const handleBillFormChange = (e) => {
+      const { name, value, type, checked } = e.target;
+      setBillFormData(prev => {
+          let newData = { ...prev, [name]: type === 'checkbox' ? checked : value };
+          if (name === 'city') {
+             const catsForNewCity = categoriesByCity[value] || { income: ['Outros'], expense: ['Outros'] };
+             const catList = newData.type === 'income' ? catsForNewCity.income : catsForNewCity.expense;
+             newData.category = sortCategories(catList)[0] || '';
+             newData.customDescription = '';
+          }
+          return newData;
+      });
+  };
   
   const handleSaveBill = async (e) => {
     e.preventDefault();
     let finalCategory = billFormData.category;
     if (billFormData.category.toLowerCase().includes('outros') && billFormData.customDescription.trim()) finalCategory = `${billFormData.category} (${billFormData.customDescription.trim()})`;
-    
     let amountStr = billFormData.amount.toString().trim().replace(/[^\d.,]/g, '');
     if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
     let finalAmount = Math.round((parseFloat(amountStr) || 0) * 100) / 100;
-
     const baseDate = new Date(billFormData.dueDate + 'T12:00:00');
     const monthsToCreate = billFormData.isRecurring ? parseInt(billFormData.recurrenceMonths) : 1;
 
     for (let i = 0; i < monthsToCreate; i++) {
-        const currentDate = new Date(baseDate);
-        currentDate.setMonth(currentDate.getMonth() + i);
-        const formattedDate = currentDate.toISOString().split('T')[0];
-        
+        const currentDate = new Date(baseDate); currentDate.setMonth(currentDate.getMonth() + i);
         const newBill = {
-           amount: finalAmount, type: billFormData.type, dueDate: formattedDate,
-           category: finalCategory + (monthsToCreate > 1 ? ` (${i+1}/${monthsToCreate})` : ''), 
-           status: 'pending', city: billFormData.city || 'Geral',
-           createdAt: new Date().toISOString()
+           amount: finalAmount, type: billFormData.type, dueDate: currentDate.toISOString().split('T')[0], city: billFormData.city,
+           category: finalCategory + (monthsToCreate > 1 ? ` (${i+1}/${monthsToCreate})` : ''), status: 'pending', createdAt: new Date().toISOString()
         };
         await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'bills', Date.now().toString() + i), newBill);
     }
@@ -492,177 +516,148 @@ function DashboardApp({ userProfile }) {
      await setDoc(billRef, { status: 'paid', paymentDate: settleModal.paymentDate, paidAmount: finalPaidAmount, updatedAt: new Date().toISOString() }, { merge: true });
 
      const txRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', Date.now().toString());
-     await setDoc(txRef, {
-        amount: finalPaidAmount, type: bill.type, date: settleModal.paymentDate,
-        category: bill.category, paymentMethod: settleModal.paymentMethod, city: bill.city || 'Geral', originBillId: bill.id, updatedAt: new Date().toISOString()
-     });
-
+     await setDoc(txRef, { amount: finalPaidAmount, type: bill.type, date: settleModal.paymentDate, category: bill.category, paymentMethod: settleModal.paymentMethod, city: bill.city || 'Geral', originBillId: bill.id, updatedAt: new Date().toISOString() });
      setSettleModal({ isOpen: false, bill: null, paymentDate: '', paidAmount: '', paymentMethod: PAYMENT_METHODS[0] });
   };
 
-  const uniqueEmployeesList = useMemo(() => {
-      const map = new Map();
-      const sorted = [...payroll].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      sorted.forEach(p => {
-          if (!map.has(p.employeeName)) {
-              map.set(p.employeeName, p.role);
-          }
-      });
-      return Array.from(map.keys()).sort();
-  }, [payroll]);
-
   const handleOpenPayrollModal = () => {
-      if (userProfile.plan === 'Básico') {
-         openConfirm('Plano Pro Necessário', 'A folha de pagamento é exclusiva do Plano Pro. Atualize para gerenciar seus funcionários!', () => { setCurrentView('plans'); closeConfirm(); }, true);
-         return;
-      }
-      const defaultCity = filterCity !== 'all' ? filterCity : (citiesList[0] || 'Geral');
-      const firstEmp = uniqueEmployeesList.length > 0 ? uniqueEmployeesList[0] : '';
-      const firstRole = firstEmp ? (payroll.find(p => p.employeeName === firstEmp)?.role || '') : '';
-      
-      setPayrollFormData({ 
-          employeeName: firstEmp, 
-          role: firstRole, 
-          amount: '', 
-          date: new Date().toISOString().split('T')[0], 
-          city: defaultCity, 
-          paymentMethod: PAYMENT_METHODS[0] 
-      });
-      setIsNewEmployee(uniqueEmployeesList.length === 0);
+      const defaultCity = citiesList[0] || 'Geral';
+      setPayrollFormData({ employeeName: '', role: '', amount: '', date: new Date().toISOString().split('T')[0], city: defaultCity, paymentMethod: PAYMENT_METHODS[0] });
       setIsPayrollModalOpen(true);
   };
 
   const handleSavePayroll = async (e) => {
       e.preventDefault();
-      
       let amountStr = payrollFormData.amount.toString().trim().replace(/[^\d.,]/g, '');
       if (amountStr.includes(',')) amountStr = amountStr.replace(/\./g, '').replace(',', '.'); 
       let finalAmount = Math.round((parseFloat(amountStr) || 0) * 100) / 100;
 
-      const newId = Date.now().toString();
+      const payrollId = Date.now().toString();
       
-      const newPayrollRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', newId);
-      await setDoc(newPayrollRef, {
+      const payrollData = {
           employeeName: payrollFormData.employeeName,
           role: payrollFormData.role,
           amount: finalAmount,
           date: payrollFormData.date,
-          city: payrollFormData.city || 'Geral',
+          city: payrollFormData.city,
           paymentMethod: payrollFormData.paymentMethod,
           createdAt: new Date().toISOString()
-      });
+      };
 
-      const txRef = doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', newId + '_tx');
-      await setDoc(txRef, {
+      // Salva no banco de dados da Folha
+      await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', payrollId), payrollData);
+
+      // Injeta AUTOMATICAMENTE como despesa no Caixa Real (Transactions)
+      const txData = {
           amount: finalAmount,
           type: 'expense',
           date: payrollFormData.date,
           category: `Folha: ${payrollFormData.employeeName}`,
           paymentMethod: payrollFormData.paymentMethod,
-          city: payrollFormData.city || 'Geral',
-          originPayrollId: newId,
+          city: payrollFormData.city,
+          originPayrollId: payrollId, // Vínculo para apagar junto
           updatedAt: new Date().toISOString()
-      });
+      };
+      await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', `pay_${payrollId}`), txData);
 
       setIsPayrollModalOpen(false);
   };
 
   const requestDeletePayroll = (id) => {
-      openConfirm('Excluir Pagamento', 'Isto removerá este registro e também anulará a despesa no seu Caixa Principal. Confirmar?', async () => {
+      openConfirm('Excluir Folha', 'Tem certeza que deseja excluir o pagamento deste funcionário? O valor sairá do seu caixa e o DRE será atualizado.', async () => {
           await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'payroll', id));
-          await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', id + '_tx'));
+          await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'transactions', `pay_${id}`));
           closeConfirm();
       });
-  };
-
-  const handleOpenCategoryModal = (type, categoryName = null) => {
-    setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
-  };
-
-  const handleSaveCategory = async (e) => {
-    e.preventDefault();
-    const { originalName, currentName, type } = categoryModal;
-    const trimmedName = currentName.trim();
-    if (!trimmedName) return;
-    
-    let updatedIncomes = [...incomeCategories]; let updatedExpenses = [...expenseCategories];
-    if (type === 'income') {
-      if (originalName) updatedIncomes = updatedIncomes.map(c => c === originalName ? trimmedName : c);
-      else if (!updatedIncomes.includes(trimmedName)) updatedIncomes.push(trimmedName);
-    } else {
-      if (originalName) updatedExpenses = updatedExpenses.map(c => c === originalName ? trimmedName : c);
-      else if (!updatedExpenses.includes(trimmedName)) updatedExpenses.push(trimmedName);
-    }
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
-    setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
-  };
-
-  const requestDeleteCategory = (catName, type) => {
-    openConfirm('Excluir Categoria', `Tem a certeza que deseja excluir "${catName}"?`, async () => {
-        let updatedIncomes = [...incomeCategories]; let updatedExpenses = [...expenseCategories];
-        if (type === 'income') updatedIncomes = updatedIncomes.filter(c => c !== catName);
-        else updatedExpenses = updatedExpenses.filter(c => c !== catName);
-        await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { income: updatedIncomes, expense: updatedExpenses }, { merge: true });
-        closeConfirm();
-    });
   };
 
   const handleSaveCity = async (e) => {
       e.preventDefault();
       const trimmed = cityModal.currentName.trim();
-      if(!trimmed) return;
-      let newList = [...citiesList];
+      if (!trimmed) return;
+      
+      let newCitiesList = [...citiesList];
+      let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
+      
       if (cityModal.originalName) {
-          newList = newList.map(c => c === cityModal.originalName ? trimmed : c);
+          newCitiesList = newCitiesList.map(c => c === cityModal.originalName ? trimmed : c);
+          newCatsByCity[trimmed] = newCatsByCity[cityModal.originalName];
+          delete newCatsByCity[cityModal.originalName];
+          if (activeCityManager === cityModal.originalName) setActiveCityManager(trimmed);
+          if (filterCity === cityModal.originalName) setFilterCity(trimmed);
       } else {
-          if (!newList.includes(trimmed)) newList.push(trimmed);
+          if (!newCitiesList.includes(trimmed)) {
+              newCitiesList.push(trimmed);
+              newCatsByCity[trimmed] = { income: ['Serviço', 'Venda', 'Outros'], expense: ['Alimentação', 'Moradia', 'Transporte', 'Outros'] };
+          }
       }
-      await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'cities'), { list: newList }, { merge: true });
+      
+      await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { citiesList: newCitiesList, categoriesByCity: newCatsByCity }, { merge: true });
       setCityModal({ isOpen: false, currentName: '', originalName: '' });
   };
 
-  const requestDeleteCity = (cityName) => {
-      if (cityName === 'Geral') {
-          openConfirm('Ação não permitida', 'A cidade "Geral" é a matriz padrão do sistema e não pode ser excluída, apenas renomeada.', () => closeConfirm(), true);
-          return;
-      }
-      openConfirm('Excluir Cidade', `Deseja excluir "${cityName}"? Os lançamentos continuarão existindo associados a esta cidade, mas ela sairá da lista.`, async () => {
-          const newList = citiesList.filter(c => c !== cityName);
-          await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'cities'), { list: newList }, { merge: true });
-          if (filterCity === cityName) setFilterCity('all');
+  const requestDeleteCity = (city) => {
+      if (city === 'Geral') return;
+      openConfirm('Excluir Cidade', `Tem a certeza que deseja excluir "${city}"? Os lançamentos desta cidade não serão apagados, mas ficarão orfãos.`, async () => {
+          let newCitiesList = citiesList.filter(c => c !== city);
+          let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
+          delete newCatsByCity[city];
+          if (newCitiesList.length === 0) newCitiesList.push('Geral');
+          
+          await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { citiesList: newCitiesList, categoriesByCity: newCatsByCity }, { merge: true });
+          if (activeCityManager === city) setActiveCityManager(newCitiesList[0]);
+          if (filterCity === city) setFilterCity('all');
           closeConfirm();
       });
   };
 
-  const handleToggleUserStatus = (user) => {
-    const isCurrentlyActive = user.status === 'Ativo';
-    const userRef = doc(db, 'artifacts', APP_ID, 'users', user.uid);
-    setDoc(userRef, { status: isCurrentlyActive ? 'Bloqueado' : 'Ativo' }, { merge: true });
+  const handleOpenCategoryModal = (type, categoryName = null) => {
+      setCategoryModal({ isOpen: true, type: type, originalName: categoryName || '', currentName: categoryName || '' });
   };
 
-  const handleDeleteAdminUser = (user) => {
-    openConfirm('Excluir Cliente', `Excluir a conta de ${user.name}? Os dados serão perdidos.`, async () => {
-        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid));
-        closeConfirm();
-    });
-  };
-
-  const handleSaveAdminEdit = async (e) => {
+  const handleSaveCategory = async (e) => {
     e.preventDefault();
-    let parsedDays = parseInt(adminEditModal.daysRemaining);
-    if (isNaN(parsedDays)) parsedDays = 0;
+    try {
+        const { originalName, currentName, type } = categoryModal;
+        const trimmedName = currentName.trim();
+        if (!trimmedName) return;
+        
+        let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
+        let cityCats = newCatsByCity[activeCityManager] || { income: ['Outros'], expense: ['Outros'] };
+        
+        if (type === 'income') {
+          if (originalName) cityCats.income = cityCats.income.map(c => c === originalName ? trimmedName : c);
+          else if (!cityCats.income.includes(trimmedName)) cityCats.income.push(trimmedName);
+        } else {
+          if (originalName) cityCats.expense = cityCats.expense.map(c => c === originalName ? trimmedName : c);
+          else if (!cityCats.expense.includes(trimmedName)) cityCats.expense.push(trimmedName);
+        }
+        
+        newCatsByCity[activeCityManager] = cityCats;
+        await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { categoriesByCity: newCatsByCity }, { merge: true });
+        setCategoryModal({ isOpen: false, type: 'income', originalName: '', currentName: '' });
+    } catch (err) {
+        console.error("Erro ao salvar categoria:", err);
+    }
+  };
 
-    const userRef = doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid);
-    const today = new Date().toISOString().split('T')[0];
-    
-    await setDoc(userRef, { 
-      plan: adminEditModal.plan, 
-      daysRemaining: parsedDays,
-      status: parsedDays > 0 ? 'Ativo' : 'Bloqueado',
-      lastDecrementDate: today
-    }, { merge: true });
-    
-    setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
+  const requestDeleteCategory = (catName, type) => {
+    openConfirm('Excluir Categoria', `Tem a certeza que deseja excluir "${catName}" de ${activeCityManager}?`, async () => {
+        try {
+            let newCatsByCity = JSON.parse(JSON.stringify(categoriesByCity));
+            let cityCats = newCatsByCity[activeCityManager];
+            
+            if (type === 'income') cityCats.income = cityCats.income.filter(c => c !== catName);
+            else cityCats.expense = cityCats.expense.filter(c => c !== catName);
+            
+            newCatsByCity[activeCityManager] = cityCats;
+            await setDoc(doc(db, 'artifacts', APP_ID, 'users', userProfile.uid, 'settings', 'categories'), { categoriesByCity: newCatsByCity }, { merge: true });
+            closeConfirm();
+        } catch (err) {
+            console.error("Erro ao excluir categoria:", err);
+            closeConfirm();
+        }
+    });
   };
 
   const filterDataByPeriod = (dataArray, dateField) => {
@@ -670,7 +665,6 @@ function DashboardApp({ userProfile }) {
     return dataArray.filter(item => {
       if (filterPeriod === 'all') return true;
       const itemTime = new Date(item[dateField] + 'T00:00:00').getTime();
-      
       if (filterPeriod === 'today') return item[dateField] === today.toISOString().split('T')[0];
       if (filterPeriod === '15days') {
          const past = new Date(today); past.setDate(today.getDate() - 15);
@@ -697,152 +691,226 @@ function DashboardApp({ userProfile }) {
     });
   };
 
-  const applyGlobalFilters = (array, dateField) => {
-      let filtered = filterDataByPeriod(array, dateField);
-      if (filterCity !== 'all') filtered = filtered.filter(item => (item.city || 'Geral') === filterCity);
-      return filtered;
-  };
-
   const filteredTransactions = useMemo(() => {
-    let filtered = applyGlobalFilters(transactions, 'date');
+    let filtered = filterDataByPeriod(transactions, 'date');
+    if (filterCity !== 'all') filtered = filtered.filter(tx => (tx.city || 'Geral') === filterCity);
     if (filterType !== 'all') filtered = filtered.filter(tx => tx.type === filterType);
     if (filterCategory !== 'all') filtered = filtered.filter(tx => tx.category === filterCategory);
     return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
   }, [transactions, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterType, filterCategory, filterCity]);
 
   const filteredBills = useMemo(() => {
-    let filtered = applyGlobalFilters(bills, 'dueDate');
+    let filtered = filterDataByPeriod(bills, 'dueDate');
+    if (filterCity !== 'all') filtered = filtered.filter(b => (b.city || 'Geral') === filterCity);
     if (filterType !== 'all') filtered = filtered.filter(b => b.type === filterType);
     return filtered.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()); 
   }, [bills, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterType, filterCity]);
 
   const filteredPayroll = useMemo(() => {
-      return applyGlobalFilters(payroll, 'date').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    let filtered = filterDataByPeriod(payroll, 'date');
+    if (filterCity !== 'all') filtered = filtered.filter(p => (p.city || 'Geral') === filterCity);
+    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
   }, [payroll, filterPeriod, customDateStart, customDateEnd, selectedMonth, selectedYear, filterCity]);
 
   const usedCategoriesInPeriod = useMemo(() => sortCategories(Array.from(new Set(filteredTransactions.map(tx => tx.category))).filter(Boolean)), [filteredTransactions]);
-
-  const getPeriodNameForExcel = () => {
-    if (filterPeriod === 'specific_month') return `Mês ${selectedMonth}/${selectedYear}`;
-    if (filterPeriod === 'custom') return `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
-    if (filterPeriod === 'month') return 'Mês Atual';
-    if (filterPeriod === 'today') return 'Hoje';
-    if (filterPeriod === '15days') return 'Últimos 15 Dias';
-    return 'Todo o Período';
-  };
-
-  const generateExcelBlob = (htmlContent) => {
-      return new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
-  };
-
-  const downloadBlob = (blob, filename) => {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url; link.download = filename;
-      document.body.appendChild(link); link.click();
-      document.body.removeChild(link); URL.revokeObjectURL(url);
-  };
-
-  const getExcelStyles = () => `
-    <style>
-        table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
-        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
-        .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
-        .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
-        .section-title { font-weight: bold; text-align: center; color: white; }
-        .income-title { background-color: #10b981; }
-        .expense-title { background-color: #ef4444; }
-        .summary-row { font-weight: bold; }
-        .summary-bg { background-color: #f8fafc; }
-        .text-right { text-align: right; }
-        .text-green { color: #059669; }
-        .text-red { color: #dc2626; }
-        .text-blue { color: #000066; }
-    </style>
-  `;
 
   const handleExportCSV = () => {
     if (filteredTransactions.length === 0) return;
     const incomes = filteredTransactions.filter(t => t.type === 'income');
     const expenses = filteredTransactions.filter(t => t.type === 'expense');
+    
     const totalIncome = incomes.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
     const totalExpense = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
     const balance = totalIncome - totalExpense;
 
-    let excelHTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">${getExcelStyles()}</head><body><table>
-        <tr><td colspan="5" class="header">RELATÓRIO FINANCEIRO (DRE) - LD FINANÇAS</td></tr>
-        <tr><td colspan="5" class="sub-header">Titular: ${userProfile?.name} | Período: ${getPeriodNameForExcel()} | Cidade: ${filterCity === 'all' ? 'Todas' : filterCity} | Gerado: ${formatDate(new Date().toISOString().split('T')[0])}</td></tr>
-        <tr><td colspan="5"></td></tr>
-        <tr class="summary-row summary-bg"><td colspan="4">RECEITAS TOTAIS (+)</td><td class="text-right text-green">R$ ${formatNumber(totalIncome)}</td></tr>
-        <tr class="summary-row summary-bg"><td colspan="4">DESPESAS TOTAIS (-)</td><td class="text-right text-red">-R$ ${formatNumber(totalExpense)}</td></tr>
-        <tr class="summary-row summary-bg"><td colspan="4">SALDO LÍQUIDO DO PERÍODO (=)</td><td class="text-right ${balance < 0 ? 'text-red' : 'text-blue'}">R$ ${formatNumber(balance)}</td></tr>
-        <tr><td colspan="5"></td></tr>
-        <tr><td colspan="5" class="section-title income-title">DETALHAMENTO DE ENTRADAS (RECEITAS)</td></tr>
-        <tr class="sub-header"><td>Data</td><td>Cidade</td><td>Categoria / Descrição</td><td>Forma Pagto</td><td class="text-right">Valor Bruto</td></tr>`;
+    let periodName = filterPeriod;
+    if (filterPeriod === 'specific_month') periodName = `Mês ${selectedMonth}/${selectedYear}`;
+    if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
+    if (filterPeriod === 'month') periodName = 'Mês Atual';
+    
+    let excelHTML = `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+          <meta charset="utf-8">
+          <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+              th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+              .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
+              .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
+              .section-title { font-weight: bold; text-align: center; color: white; }
+              .income-title { background-color: #10b981; }
+              .expense-title { background-color: #ef4444; }
+              .summary-row { font-weight: bold; }
+              .summary-bg { background-color: #f8fafc; }
+              .text-right { text-align: right; }
+              .text-green { color: #059669; }
+              .text-red { color: #dc2626; }
+              .text-blue { color: #000066; }
+          </style>
+      </head>
+      <body>
+          <table>
+              <tr><td colspan="5" class="header">RELATÓRIO FINANCEIRO (DRE) - LD FINANÇAS</td></tr>
+              <tr><td colspan="5" class="sub-header">Titular: ${userProfile?.name} | Cidade/Filtro: ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | Período: ${periodName}</td></tr>
+              <tr><td colspan="5"></td></tr>
+              <tr class="summary-row summary-bg"><td colspan="4">RECEITAS TOTAIS (+)</td><td class="text-right text-green">R$ ${formatNumber(totalIncome)}</td></tr>
+              <tr class="summary-row summary-bg"><td colspan="4">DESPESAS TOTAIS (-)</td><td class="text-right text-red">-R$ ${formatNumber(totalExpense)}</td></tr>
+              <tr class="summary-row summary-bg"><td colspan="4">SALDO LÍQUIDO DO PERÍODO (=)</td><td class="text-right ${balance < 0 ? 'text-red' : 'text-blue'}">R$ ${formatNumber(balance)}</td></tr>
+              <tr><td colspan="5"></td></tr>
+              <tr><td colspan="5" class="section-title income-title">DETALHAMENTO DE ENTRADAS (RECEITAS)</td></tr>
+              <tr class="sub-header"><td>Data</td><td>Cidade/Escritório</td><td>Categoria / Descrição</td><td>Forma Pagto</td><td class="text-right">Valor Bruto</td></tr>
+    `;
 
-    if (incomes.length === 0) excelHTML += `<tr><td colspan="5" style="text-align: center;">Nenhuma entrada.</td></tr>`;
+    if (incomes.length === 0) excelHTML += `<tr><td colspan="5" style="text-align: center;">Nenhuma entrada registada.</td></tr>`;
     else incomes.forEach(tx => excelHTML += `<tr><td>${formatDate(tx.date)}</td><td>${tx.city || 'Geral'}</td><td>${tx.category || '-'}</td><td>${tx.paymentMethod || '-'}</td><td class="text-right text-green">R$ ${formatNumber(tx.amount)}</td></tr>`);
 
-    excelHTML += `<tr><td colspan="5"></td></tr><tr><td colspan="5" class="section-title expense-title">DETALHAMENTO DE SAÍDAS (DESPESAS)</td></tr>
-        <tr class="sub-header"><td>Data</td><td>Cidade</td><td>Categoria / Descrição</td><td>Forma Pagto</td><td class="text-right">Valor</td></tr>`;
+    excelHTML += `<tr><td colspan="5"></td></tr><tr><td colspan="5" class="section-title expense-title">DETALHAMENTO DE SAÍDAS (DESPESAS)</td></tr><tr class="sub-header"><td>Data</td><td>Cidade/Escritório</td><td>Categoria / Descrição</td><td>Forma Pagto</td><td class="text-right">Valor</td></tr>`;
 
-    if (expenses.length === 0) excelHTML += `<tr><td colspan="5" style="text-align: center;">Nenhuma saída.</td></tr>`;
+    if (expenses.length === 0) excelHTML += `<tr><td colspan="5" style="text-align: center;">Nenhuma saída registada.</td></tr>`;
     else expenses.forEach(tx => excelHTML += `<tr><td>${formatDate(tx.date)}</td><td>${tx.city || 'Geral'}</td><td>${tx.category || '-'}</td><td>${tx.paymentMethod || '-'}</td><td class="text-right text-red">-R$ ${formatNumber(tx.amount)}</td></tr>`);
 
     excelHTML += `</table></body></html>`;
-    downloadBlob(generateExcelBlob(excelHTML), `DRE_LD_Financas_${new Date().toISOString().split('T')[0]}.xls`);
+    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url;
+    link.download = `DRE_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
   const handleExportBillsCSV = () => {
     if (filteredBills.length === 0) return;
-    const pending = filteredBills.filter(b => b.status === 'pending');
-    const paid = filteredBills.filter(b => b.status === 'paid');
+    const pendingBills = filteredBills.filter(b => b.status === 'pending');
+    const paidBills = filteredBills.filter(b => b.status === 'paid');
+    
+    let periodName = filterPeriod;
+    if (filterPeriod === 'specific_month') periodName = `Mês ${selectedMonth}/${selectedYear}`;
+    if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
+    if (filterPeriod === 'month') periodName = 'Mês Atual';
+    
+    let excelHTML = `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+          <meta charset="utf-8">
+          <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+              th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+              .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
+              .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
+              .section-title { font-weight: bold; text-align: center; color: white; margin-top: 20px; }
+              .pending-title { background-color: #f59e0b; }
+              .paid-title { background-color: #10b981; }
+              .text-right { text-align: right; }
+              .text-green { color: #059669; }
+              .text-red { color: #dc2626; }
+              .font-bold { font-weight: bold; }
+          </style>
+      </head>
+      <body>
+          <table>
+              <tr><td colspan="6" class="header">RELATÓRIO DE PREVISÕES (CONTAS A PAGAR E RECEBER)</td></tr>
+              <tr><td colspan="6" class="sub-header">Titular: ${userProfile?.name} | Cidade/Filtro: ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | Período: ${periodName}</td></tr>
+              <tr><td colspan="6"></td></tr>
+              <tr><td colspan="6" class="section-title pending-title">AGENDAMENTOS PENDENTES</td></tr>
+              <tr class="sub-header">
+                <td>Status</td><td>Tipo</td><td>Data Vencimento</td><td>Cidade</td><td>Categoria / Descrição</td><td class="text-right">Valor Previsto</td>
+              </tr>
+    `;
 
-    let excelHTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">${getExcelStyles()}</head><body><table>
-        <tr><td colspan="6" class="header">RELATÓRIO DE PREVISÕES (CONTAS A PAGAR/RECEBER)</td></tr>
-        <tr><td colspan="6" class="sub-header">Titular: ${userProfile?.name} | Período: ${getPeriodNameForExcel()} | Cidade: ${filterCity === 'all' ? 'Todas' : filterCity}</td></tr>
-        <tr><td colspan="6"></td></tr>
-        <tr><td colspan="6" class="section-title income-title" style="background-color: #f59e0b;">CONTAS PENDENTES (A VENCER OU ATRASADAS)</td></tr>
-        <tr class="sub-header"><td>Status</td><td>Vencimento</td><td>Cidade</td><td>Categoria</td><td>Tipo</td><td class="text-right">Valor</td></tr>`;
+    if (pendingBills.length === 0) {
+        excelHTML += `<tr><td colspan="6" style="text-align: center;">Nenhuma conta pendente para este período.</td></tr>`;
+    } else {
+        pendingBills.forEach(bill => {
+            const typeStr = bill.type === 'income' ? 'A Receber' : 'A Pagar';
+            const valClass = bill.type === 'income' ? 'text-green' : 'text-red';
+            const valPrefix = bill.type === 'income' ? '+' : '-';
+            excelHTML += `<tr><td class="font-bold">Pendente</td><td>${typeStr}</td><td>${formatDate(bill.dueDate)}</td><td>${bill.city || 'Geral'}</td><td>${bill.category || '-'}</td><td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.amount)}</td></tr>`;
+        });
+    }
 
-    if (pending.length === 0) excelHTML += `<tr><td colspan="6" style="text-align: center;">Nenhuma conta pendente.</td></tr>`;
-    else pending.forEach(b => {
-        const isOverdue = new Date(b.dueDate) < new Date(new Date().setHours(0,0,0,0));
-        excelHTML += `<tr><td style="${isOverdue ? 'color: red; font-weight: bold;' : ''}">${isOverdue ? 'Atrasado' : 'A Vencer'}</td><td>${formatDate(b.dueDate)}</td><td>${b.city || 'Geral'}</td><td>${b.category}</td><td>${b.type === 'income' ? 'Receita' : 'Despesa'}</td><td class="text-right ${b.type==='income'?'text-green':'text-red'}">${b.type==='income'?'+':'-'} R$ ${formatNumber(b.amount)}</td></tr>`;
-    });
+    excelHTML += `
+              <tr><td colspan="6"></td></tr>
+              <tr><td colspan="6" class="section-title paid-title">HISTÓRICO DE BAIXAS (PAGAS/RECEBIDAS)</td></tr>
+              <tr class="sub-header">
+                <td>Status</td><td>Tipo</td><td>Data Efetiva</td><td>Cidade</td><td>Categoria / Descrição</td><td class="text-right">Valor Pago/Recebido</td>
+              </tr>
+    `;
 
-    excelHTML += `<tr><td colspan="6"></td></tr><tr><td colspan="6" class="section-title income-title" style="background-color: #3b82f6;">HISTÓRICO DE CONTAS BAIXADAS (PAGAS/RECEBIDAS)</td></tr>
-        <tr class="sub-header"><td>Status</td><td>Data Pagto</td><td>Cidade</td><td>Categoria</td><td>Tipo</td><td class="text-right">Valor Pago</td></tr>`;
-
-    if (paid.length === 0) excelHTML += `<tr><td colspan="6" style="text-align: center;">Nenhuma conta baixada neste período.</td></tr>`;
-    else paid.forEach(b => excelHTML += `<tr><td class="text-blue" style="font-weight:bold;">Baixado</td><td>${formatDate(b.paymentDate)}</td><td>${b.city || 'Geral'}</td><td>${b.category}</td><td>${b.type === 'income' ? 'Receita' : 'Despesa'}</td><td class="text-right ${b.type==='income'?'text-green':'text-red'}">${b.type==='income'?'+':'-'} R$ ${formatNumber(b.paidAmount)}</td></tr>`);
+    if (paidBills.length === 0) {
+        excelHTML += `<tr><td colspan="6" style="text-align: center;">Nenhuma baixa efetuada neste período.</td></tr>`;
+    } else {
+        paidBills.forEach(bill => {
+            const typeStr = bill.type === 'income' ? 'Recebido' : 'Pago';
+            const valClass = bill.type === 'income' ? 'text-green' : 'text-red';
+            const valPrefix = bill.type === 'income' ? '+' : '-';
+            excelHTML += `<tr><td class="font-bold text-green">Baixado</td><td>${typeStr}</td><td>${formatDate(bill.paymentDate)}</td><td>${bill.city || 'Geral'}</td><td><del>${bill.category || '-'}</del></td><td class="text-right ${valClass}">${valPrefix}R$ ${formatNumber(bill.paidAmount)}</td></tr>`;
+        });
+    }
 
     excelHTML += `</table></body></html>`;
-    downloadBlob(generateExcelBlob(excelHTML), `Previsoes_LDFinancas_${new Date().toISOString().split('T')[0]}.xls`);
+    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url;
+    link.download = `Previsoes_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
   const handleExportPayrollCSV = () => {
     if (filteredPayroll.length === 0) return;
+    
     const total = filteredPayroll.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    
+    let periodName = filterPeriod;
+    if (filterPeriod === 'specific_month') periodName = `Mês ${selectedMonth}/${selectedYear}`;
+    if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
+    if (filterPeriod === 'month') periodName = 'Mês Atual';
 
-    let excelHTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">${getExcelStyles()}</head><body><table>
-        <tr><td colspan="6" class="header">RELATÓRIO DE FOLHA DE PAGAMENTO - LD FINANÇAS</td></tr>
-        <tr><td colspan="6" class="sub-header">Período: ${getPeriodNameForExcel()} | Cidade: ${filterCity === 'all' ? 'Todas' : filterCity}</td></tr>
-        <tr><td colspan="6"></td></tr>
-        <tr class="summary-row summary-bg"><td colspan="5">TOTAL GASTO COM FOLHA DE PAGAMENTO</td><td class="text-right text-red">-R$ ${formatNumber(total)}</td></tr>
-        <tr><td colspan="6"></td></tr>
-        <tr class="sub-header"><td>Data</td><td>Funcionário</td><td>Cargo/Função</td><td>Cidade</td><td>Forma Pagto</td><td class="text-right">Valor Pago</td></tr>`;
+    let excelHTML = `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+          <meta charset="utf-8">
+          <style>
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+              th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+              .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
+              .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
+              .section-title { font-weight: bold; text-align: center; color: white; margin-top: 20px; background-color: #3b82f6; }
+              .text-right { text-align: right; }
+              .text-red { color: #dc2626; }
+              .font-bold { font-weight: bold; }
+              .summary-row { font-weight: bold; background-color: #f8fafc; }
+          </style>
+      </head>
+      <body>
+          <table>
+              <tr><td colspan="6" class="header">RELATÓRIO DE FOLHA DE PAGAMENTO</td></tr>
+              <tr><td colspan="6" class="sub-header">Titular: ${userProfile?.name} | Cidade/Filtro: ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | Período: ${periodName}</td></tr>
+              <tr><td colspan="6"></td></tr>
+              <tr class="sub-header">
+                <td>Data</td><td>Funcionário</td><td>Cargo / Função</td><td>Cidade / Filial</td><td>Forma Pagto</td><td class="text-right">Valor Pago</td>
+              </tr>
+    `;
 
     filteredPayroll.forEach(p => {
-        excelHTML += `<tr><td>${formatDate(p.date)}</td><td>${p.employeeName}</td><td>${p.role || '-'}</td><td>${p.city || 'Geral'}</td><td>${p.paymentMethod}</td><td class="text-right text-red">-R$ ${formatNumber(p.amount)}</td></tr>`;
+        excelHTML += `<tr><td>${formatDate(p.date)}</td><td>${p.employeeName}</td><td>${p.role || '-'}</td><td>${p.city || 'Geral'}</td><td>${p.paymentMethod}</td><td class="text-right text-red">R$ ${formatNumber(p.amount)}</td></tr>`;
     });
 
-    excelHTML += `</table></body></html>`;
-    downloadBlob(generateExcelBlob(excelHTML), `FolhaPagamento_LDFinancas_${new Date().toISOString().split('T')[0]}.xls`);
+    excelHTML += `
+              <tr><td colspan="6"></td></tr>
+              <tr class="summary-row"><td colspan="5">TOTAL GASTO COM A FOLHA</td><td class="text-right text-red">R$ ${formatNumber(total)}</td></tr>
+          </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url;
+    link.download = `Folha_Pagamento_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
   const renderFilterBar = () => (
-    <div className="flex flex-col lg:flex-row gap-4 mb-6">
+    <div className="flex flex-col xl:flex-row gap-4 mb-6">
       <div className="bg-white p-2 rounded-xl border border-slate-200 flex flex-wrap gap-2 shadow-sm flex-1">
         {['all', 'today', '15days', 'month', 'specific_month', 'custom'].map(period => (
           <button key={period} onClick={() => setFilterPeriod(period)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterPeriod === period ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -850,42 +918,48 @@ function DashboardApp({ userProfile }) {
           </button>
         ))}
       </div>
-      <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[160px]">
-          <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none p-2 appearance-none">
-             <option value="all">🏢 Todas Cidades</option>
-             {citiesList.map(c => <option key={c} value={c}>{c}</option>)}
+      
+      <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[160px] flex items-center gap-1">
+          <Building size={16} className="text-slate-400 ml-2" />
+          <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none p-1 cursor-pointer">
+            <option value="all">Todas Cidades</option>
+            {citiesList.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+        </div>
+
+        {(currentView === 'dashboard' || currentView === 'transactions' || currentView === 'bills') && (
+          <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[140px]">
+            <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setFilterCategory('all'); }} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-1 cursor-pointer">
+              <option value="all">Todos Tipos</option>
+              <option value="income">Entradas (+)</option>
+              <option value="expense">Saídas (-)</option>
+            </select>
+          </div>
+        )}
+
+        {(currentView === 'dashboard' || currentView === 'transactions') && (
+          <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[180px]">
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-1 cursor-pointer">
+              <option value="all">Todas Categorias</option>
+              {usedCategoriesInPeriod.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+          </div>
+        )}
       </div>
-      {(currentView === 'dashboard' || currentView === 'transactions' || currentView === 'bills') && (
-        <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[160px]">
-          <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setFilterCategory('all'); }} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-2">
-            <option value="all">Todos Tipos</option>
-            <option value="income">Entradas (+)</option>
-            <option value="expense">Saídas (-)</option>
-          </select>
-        </div>
-      )}
-      {(currentView === 'dashboard' || currentView === 'transactions') && (
-        <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm shrink-0 min-w-[200px]">
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none p-2">
-            <option value="all">Todas Categorias</option>
-            {usedCategoriesInPeriod.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-        </div>
-      )}
     </div>
   );
 
   const renderFilterExtras = () => (
     <>
       {filterPeriod === 'custom' && (
-         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in">
            <Input label="Data Inicial" type="date" value={customDateStart} onChange={e => setCustomDateStart(e.target.value)} />
            <Input label="Data Final" type="date" value={customDateEnd} onChange={e => setCustomDateEnd(e.target.value)} />
          </div>
       )}
       {filterPeriod === 'specific_month' && (
-         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 animate-in fade-in">
            <Select label="Mês" name="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} options={[{value:'01',label:'Janeiro'},{value:'02',label:'Fevereiro'},{value:'03',label:'Março'},{value:'04',label:'Abril'},{value:'05',label:'Maio'},{value:'06',label:'Junho'},{value:'07',label:'Julho'},{value:'08',label:'Agosto'},{value:'09',label:'Setembro'},{value:'10',label:'Outubro'},{value:'11',label:'Novembro'},{value:'12',label:'Dezembro'}]} />
            <Input label="Ano" name="year" type="number" value={selectedYear} onChange={e => setSelectedYear(e.target.value)} placeholder="Ex: 2026" />
          </div>
@@ -901,34 +975,54 @@ function DashboardApp({ userProfile }) {
     }, { income: 0, expense: 0 });
     const balance = totals.income - totals.expense;
     
+    const incomePaymentData = filteredTransactions.filter(t => t.type === 'income').reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
+    const expensePaymentData = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, tx) => { acc[tx.paymentMethod] = (acc[tx.paymentMethod] || 0) + parseFloat(tx.amount); return acc; }, {});
+
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2>
-          <Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar DRE (Excel)</Button>
-        </header>
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Principal</h2><Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar DRE (Excel)</Button></header>
         {renderFilterBar()}
         {renderFilterExtras()}
+        
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-6 rounded-2xl shadow-md text-white bg-[#000066]">
-            <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p>
-            <h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3>
-          </div>
+          <div className="p-6 rounded-2xl shadow-md text-white bg-[#000066]"><p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider">Saldo do Período</p><h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3></div>
           <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Entradas</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
           <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">Saídas</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
         </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-           <Card className="p-6 flex flex-col h-full lg:col-span-2">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2"><Calendar className="text-blue-500" size={20}/> Atividade Recente</h3>
-                <button onClick={() => setCurrentView('transactions')} className="text-sm font-bold text-emerald-600 hover:text-emerald-700">Ver tudo</button>
-              </div>
+           <div className="space-y-6">
+             <Card className="p-6">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-emerald-500" size={20}/> Pagamentos (Entradas)</h3>
+                {Object.entries(incomePaymentData).length > 0 ? (
+                  <div className="space-y-5">
+                    {Object.entries(incomePaymentData).sort((a,b)=>b[1]-a[1]).map(([method, val]) => {
+                      const percent = totals.income > 0 ? ((val / totals.income) * 100).toFixed(1) : 0;
+                      return (<div key={method}><div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-emerald-600">+R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div><div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${percent}%` }}></div></div></div>)
+                    })}
+                  </div>
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma entrada registada.</p>)}
+             </Card>
+             <Card className="p-6">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-6"><CreditCard className="text-red-500" size={20}/> Pagamentos (Saídas)</h3>
+                {Object.entries(expensePaymentData).length > 0 ? (
+                  <div className="space-y-5">
+                    {Object.entries(expensePaymentData).sort((a,b)=>b[1]-a[1]).map(([method, val]) => {
+                      const percent = totals.expense > 0 ? ((val / totals.expense) * 100).toFixed(1) : 0;
+                      return (<div key={method}><div className="flex justify-between text-sm mb-1.5"><span className="font-bold text-slate-700">{method}</span><span className="font-bold text-red-600">-R$ {formatNumber(val)} <span className="text-slate-400 font-normal text-xs ml-1">({percent}%)</span></span></div><div className="w-full bg-slate-100 rounded-full h-2.5"><div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${percent}%` }}></div></div></div>)
+                    })}
+                  </div>
+                ) : (<p className="text-sm text-slate-500 text-center py-4">Nenhuma saída registada.</p>)}
+             </Card>
+           </div>
+           <Card className="p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-6"><h3 className="font-bold text-slate-800 flex items-center gap-2"><Calendar className="text-blue-500" size={20}/> Atividade Recente</h3><button onClick={() => setCurrentView('transactions')} className="text-sm font-bold text-emerald-600 hover:text-emerald-700">Ver tudo</button></div>
               <div className="space-y-4 flex-1">
                 {filteredTransactions.slice(0,8).map(tx => (
                   <div key={tx.id} className="flex items-center justify-between group">
                     <div className="flex items-center gap-4 overflow-hidden">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>{tx.type === 'income' ? <ArrowUpCircle size={20}/> : <ArrowDownCircle size={20}/>}</div>
-                      <div className="min-w-0"><p className="font-bold text-slate-800 text-sm truncate">{tx.category} <span className="text-[10px] font-normal text-slate-400 bg-slate-100 px-1 rounded ml-1">{tx.city || 'Geral'}</span></p><p className="text-xs text-slate-500 truncate">{formatDate(tx.date)} &bull; {tx.paymentMethod}</p></div>
+                      <div className="min-w-0"><p className="font-bold text-slate-800 text-sm truncate">{tx.category}</p><p className="text-xs text-slate-500 truncate">{formatDate(tx.date)} &bull; {tx.city || 'Geral'}</p></div>
                     </div>
                     <div className={`font-bold text-sm shrink-0 pl-4 ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? `+R$ ${formatNumber(tx.amount)}` : `-R$ ${formatNumber(tx.amount)}`}</div>
                   </div>
@@ -945,34 +1039,27 @@ function DashboardApp({ userProfile }) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Lançamentos</h2><p className="text-slate-500 text-sm mt-1">O seu caixa real diário.</p></div>
-        <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar DRE</Button><Button onClick={() => handleOpenModal()} icon={Plus}>Novo Lançamento</Button></div>
+        <div className="flex gap-2 w-full sm:w-auto"><Button onClick={handleExportCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200" icon={Download}>Baixar DRE</Button><Button onClick={() => handleOpenModal()} icon={Plus}>Novo Lançamento</Button></div>
       </header>
       {renderFilterBar()}
       {renderFilterExtras()}
+      
       <div className="space-y-3">
           {filteredTransactions.map(tx => (
             <Card key={tx.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 transition-colors group ${tx.type === 'income' ? 'border-l-emerald-500 hover:border-emerald-200' : 'border-l-red-500 hover:border-red-200'}`}>
               <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-slate-800 text-base truncate">{tx.category} <span className="ml-2 text-[10px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{tx.city || 'Geral'}</span></p>
+                  <p className="font-bold text-slate-800 text-base truncate">{tx.category}</p>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                     <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> {formatDate(tx.date)}</p>
+                    <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><Building size={12}/> {tx.city || 'Geral'}</span>
                     <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><CardIcon size={12}/> {tx.paymentMethod}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center justify-between sm:justify-end gap-4">
                 <div className={`font-bold text-lg ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{tx.type === 'income' ? `+R$ ${formatNumber(tx.amount)}` : `-R$ ${formatNumber(tx.amount)}`}</div>
-                <div className="flex gap-2 shrink-0">
-                  {tx.isPayroll ? (
-                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded">Vem da Folha</span>
-                  ) : (
-                    <>
-                      <button onClick={() => handleOpenModal(tx)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"><Edit2 size={18}/></button>
-                      <button onClick={() => requestDeleteTransaction(tx.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                    </>
-                  )}
-                </div>
+                <div className="flex gap-2 shrink-0"><button onClick={() => handleOpenModal(tx)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"><Edit2 size={18}/></button><button onClick={() => requestDeleteTransaction(tx.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button></div>
               </div>
             </Card>
           ))}
@@ -991,17 +1078,18 @@ function DashboardApp({ userProfile }) {
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Contas a Pagar/Receber</h2><p className="text-slate-500 text-sm mt-1">Ao dar baixa, o valor entra no caixa real.</p></div>
           <div className="flex gap-2 w-full sm:w-auto">
-             <Button onClick={handleExportBillsCSV} variant="outline" className="bg-white text-slate-700 border-slate-200" icon={Download}>Baixar (Excel)</Button>
-             <Button onClick={handleOpenBillModal} icon={userProfile.plan === 'Básico' ? Lock : Plus} className={userProfile.plan === 'Básico' ? 'bg-slate-300 hover:bg-slate-400 text-slate-700' : ''}>{userProfile.plan === 'Básico' ? 'Plano Pro' : 'Agendar'}</Button>
+            <Button onClick={handleExportBillsCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200" icon={Download}>Baixar Previsões</Button>
+            <Button onClick={handleOpenBillModal} icon={Plus}>Agendar</Button>
           </div>
         </header>
+        
         {renderFilterBar()}
         {renderFilterExtras()}
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800"><p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Receipt size={14}/> Saldo Previsto</p><h3 className={`text-3xl font-black ${balance < 0 ? 'text-red-400' : 'text-white'}`}>{balance < 0 ? `-R$ ${formatNumber(Math.abs(balance))}` : `R$ ${formatNumber(balance)}`}</h3></div>
-          <Card className="p-6 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowUpCircle size={14}/> A Receber</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
-          <Card className="p-6 border-l-4 border-l-red-500 hover:shadow-md transition-shadow"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><ArrowDownCircle size={14}/> A Pagar</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-emerald-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">A Receber</p><h3 className="text-2xl font-bold text-emerald-600">R$ {formatNumber(totals.income)}</h3></Card>
+          <Card className="p-6 border-l-4 border-l-red-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider">A Pagar</p><h3 className="text-2xl font-bold text-red-600">R$ {formatNumber(totals.expense)}</h3></Card>
         </div>
 
         <div className="space-y-4">
@@ -1010,37 +1098,29 @@ function DashboardApp({ userProfile }) {
                const isOverdue = new Date(bill.dueDate) < new Date(new Date().setHours(0,0,0,0));
                return (
                  <Card key={bill.id} className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 ${bill.type === 'income' ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
-                   <div className="flex items-center gap-4 w-full sm:w-auto">
-                     <div className="min-w-0 flex-1">
-                       <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{bill.category} {isOverdue && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase">Atrasado</span>}</p>
-                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1"><Calendar size={14}/> {formatDate(bill.dueDate)} <span className="ml-2 flex items-center gap-1"><Building size={12}/> {bill.city || 'Geral'}</span></p>
-                     </div>
+                   <div className="min-w-0 flex-1">
+                     <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{bill.category} {isOverdue && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase">Atrasado</span>}</p>
+                     <p className="text-sm text-slate-500 flex items-center gap-2 mt-1"><span className="flex items-center gap-1"><Calendar size={14}/> {formatDate(bill.dueDate)}</span><span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md"><Building size={12}/> {bill.city || 'Geral'}</span></p>
                    </div>
                    <div className="flex items-center justify-between sm:justify-end gap-4">
                       <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.amount)}` : `-R$ ${formatNumber(bill.amount)}`}</div>
-                      <div className="flex gap-2">
-                         <button onClick={() => openSettleModal(bill)} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors shadow-sm text-sm whitespace-nowrap">Dar Baixa</button>
-                         <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                      </div>
+                      <div className="flex gap-2"><button onClick={() => openSettleModal(bill)} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors shadow-sm text-sm">Dar Baixa</button><button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button></div>
                    </div>
                  </Card>
                )
             })}
-            {pendingBills.length === 0 && <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500 font-medium">Nenhuma conta pendente para este período.</div>}
-
+            {pendingBills.length === 0 && <div className="text-center py-8 text-slate-500 font-medium">Nenhuma conta pendente para o filtro selecionado.</div>}
+            
             <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-2 mt-8 pt-6 border-t border-slate-200">Histórico de Baixas</h3>
             {filteredBills.filter(b => b.status === 'paid').map(bill => (
                <div key={bill.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 rounded-2xl border border-slate-100 group">
-                 <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden opacity-70 group-hover:opacity-100 transition-opacity">
+                 <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden opacity-70 hover:opacity-100">
                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600"><CheckCircle size={20}/></div>
-                   <div className="min-w-0 flex-1">
-                     <p className="font-bold text-slate-800 text-base truncate line-through">{bill.category}</p>
-                     <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> Pago: {formatDate(bill.paymentDate)} &bull; {bill.city || 'Geral'}</p>
-                   </div>
+                   <div className="min-w-0 flex-1"><p className="font-bold text-slate-800 text-base truncate line-through">{bill.category}</p><p className="text-sm text-slate-500 flex items-center gap-1"><Calendar size={14}/> Pago: {formatDate(bill.paymentDate)} &bull; {bill.city || 'Geral'}</p></div>
                  </div>
-                 <div className="flex items-center gap-4 opacity-70 group-hover:opacity-100 transition-opacity">
+                 <div className="flex items-center gap-4 opacity-70 hover:opacity-100">
                     <div className={`font-bold text-lg ${bill.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>{bill.type === 'income' ? `+R$ ${formatNumber(bill.paidAmount)}` : `-R$ ${formatNumber(bill.paidAmount)}`}</div>
-                    <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Excluir Histórico"><Trash2 size={18}/></button>
+                    <button onClick={() => requestDeleteBill(bill.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg"><Trash2 size={18}/></button>
                  </div>
                </div>
             ))}
@@ -1050,117 +1130,162 @@ function DashboardApp({ userProfile }) {
   };
 
   const renderPayroll = () => {
-    const totalPayroll = filteredPayroll.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-    const uniquePaid = new Set(filteredPayroll.map(p => p.employeeName)).size;
+      const totalPayroll = filteredPayroll.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+      const uniqueEmployeesCount = new Set(filteredPayroll.map(p => p.employeeName)).size;
+
+      return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+              <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                      <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Folha de Pagamento</h2>
+                      <p className="text-slate-500 text-sm mt-1">Gestão de salários. Ao lançar, reflete no Caixa Principal.</p>
+                  </div>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                      <Button onClick={handleExportPayrollCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar Folha (Excel)</Button>
+                      <Button onClick={handleOpenPayrollModal} icon={Plus}>Novo Pagamento</Button>
+                  </div>
+              </header>
+
+              {renderFilterBar()}
+              {renderFilterExtras()}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                  <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800">
+                      <p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Wallet size={14}/> Total Gasto (Folha)</p>
+                      <h3 className="text-3xl font-black text-white">R$ {formatNumber(totalPayroll)}</h3>
+                  </div>
+                  <Card className="p-6 border-l-4 border-l-blue-500">
+                      <p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><People size={14}/> Funcionários Pagos</p>
+                      <h3 className="text-2xl font-bold text-blue-600">{uniqueEmployeesCount} <span className="text-sm text-slate-500 font-medium">pessoas</span></h3>
+                  </Card>
+              </div>
+
+              <div className="space-y-3">
+                  {filteredPayroll.map(pay => (
+                      <Card key={pay.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-l-slate-400 group hover:border-l-slate-600 transition-colors">
+                          <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-slate-100 text-slate-600 group-hover:bg-slate-200 transition-colors">
+                                  <People size={20}/>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-slate-800 text-base truncate">{pay.employeeName}</p>
+                                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
+                                      <span className="text-xs text-slate-500 font-bold">{pay.role || 'Sem Cargo'}</span>
+                                      <p className="text-sm text-slate-500 flex items-center gap-1 shrink-0"><Calendar size={14}/> {formatDate(pay.date)}</p>
+                                      <span className="hidden sm:flex text-xs items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200"><Building size={12}/> {pay.city || 'Geral'}</span>
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="flex items-center justify-between sm:justify-end gap-4">
+                              <div className="font-bold text-lg text-slate-700">R$ {formatNumber(pay.amount)}</div>
+                              <div className="flex gap-2 shrink-0">
+                                  <button onClick={() => requestDeletePayroll(pay.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                              </div>
+                          </div>
+                      </Card>
+                  ))}
+                  {filteredPayroll.length === 0 && (
+                      <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500 font-medium">
+                          Nenhum pagamento de folha registado neste período/cidade.
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+  };
+
+  const renderCategories = () => {
+    const activeCats = categoriesByCity[activeCityManager] || { income: ['Outros'], expense: ['Outros'] };
+    const sortedInc = sortCategories(activeCats.income);
+    const sortedExp = sortCategories(activeCats.expense);
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Folha de Pagamento</h2><p className="text-slate-500 text-sm mt-1">Gestão de salários. Ao lançar, reflete no Caixa Principal.</p></div>
-          <div className="flex gap-2 w-full sm:w-auto">
-             <Button onClick={handleExportPayrollCSV} variant="outline" className="bg-white text-slate-700 border-slate-200" icon={Download}>Baixar Folha (Excel)</Button>
-             <Button onClick={handleOpenPayrollModal} icon={userProfile.plan === 'Básico' ? Lock : Plus} className={userProfile.plan === 'Básico' ? 'bg-slate-300 hover:bg-slate-400 text-slate-700' : ''}>{userProfile.plan === 'Básico' ? 'Plano Pro' : 'Novo Pagamento'}</Button>
-          </div>
-        </header>
-        {renderFilterBar()}
-        {renderFilterExtras()}
+        <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Cidades & Categorias</h2><p className="text-slate-500 mt-1">Crie filiais/cidades e organize categorias específicas para cada uma.</p></header>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-          <div className="p-6 rounded-2xl shadow-md text-white bg-slate-800"><p className="font-bold mb-1 text-slate-300 uppercase text-xs tracking-wider flex items-center gap-1"><Receipt size={14}/> Total Gasto (Folha)</p><h3 className="text-3xl font-black text-white">R$ {formatNumber(totalPayroll)}</h3></div>
-          <Card className="p-6 border-l-4 border-l-blue-500"><p className="text-slate-500 font-bold mb-1 uppercase text-xs tracking-wider flex items-center gap-1"><People size={14}/> Funcionários Pagos</p><h3 className="text-2xl font-bold text-blue-600">{uniquePaid} <span className="text-sm font-medium text-slate-500">pessoas</span></h3></Card>
+        <div className="bg-slate-800 rounded-2xl p-6 shadow-sm mb-6">
+           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+               <h3 className="font-bold text-lg text-white flex items-center gap-2"><Building size={20}/> Cidades / Escritórios</h3>
+               <button onClick={() => setCityModal({isOpen: true, currentName: '', originalName: ''})} className="text-sm bg-white/10 text-white px-4 py-2 rounded-xl font-bold hover:bg-white/20 flex items-center justify-center gap-2 transition-colors"><Plus size={16}/> Nova Cidade</button>
+           </div>
+           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+               {citiesList.map(city => (
+                   <div key={city} onClick={() => setActiveCityManager(city)} className={`flex items-center gap-3 px-5 py-3 rounded-xl cursor-pointer transition-all border ${activeCityManager === city ? 'bg-emerald-500 border-emerald-400 text-white shadow-md' : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:bg-slate-700'}`}>
+                       <span className="font-bold whitespace-nowrap">{city}</span>
+                       {activeCityManager === city && city !== 'Geral' && (
+                           <div className="flex items-center gap-1 ml-2 pl-2 border-l border-white/20">
+                               <button onClick={(e) => { e.stopPropagation(); setCityModal({isOpen: true, currentName: city, originalName: city}); }} className="p-1 hover:bg-white/20 rounded"><Edit2 size={14}/></button>
+                               <button onClick={(e) => { e.stopPropagation(); requestDeleteCity(city); }} className="p-1 hover:bg-red-500/80 rounded"><Trash2 size={14}/></button>
+                           </div>
+                       )}
+                   </div>
+               ))}
+           </div>
+           <p className="text-slate-400 text-xs mt-3">* O sistema protege seus dados vinculando lançamentos antigos na cidade "Geral". Pode alterar o nome de qualquer cidade.</p>
         </div>
 
-        <div className="space-y-3">
-            {filteredPayroll.map(p => (
-               <Card key={p.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 border-l-slate-800">
-                   <div className="flex items-center gap-4 w-full sm:w-auto">
-                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-slate-600"><People size={20}/></div>
-                     <div className="min-w-0 flex-1">
-                       <p className="font-bold text-slate-800 text-base truncate flex items-center gap-2">{p.employeeName} <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase">{p.role || 'Sem Cargo'}</span></p>
-                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1"><Calendar size={14}/> {formatDate(p.date)} <span className="ml-2 flex items-center gap-1"><Building size={12}/> {p.city || 'Geral'}</span> &bull; {p.paymentMethod}</p>
-                     </div>
-                   </div>
-                   <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <div className="font-bold text-lg text-red-600">-R$ {formatNumber(p.amount)}</div>
-                      <button onClick={() => requestDeletePayroll(p.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                   </div>
-               </Card>
-            ))}
-            {filteredPayroll.length === 0 && <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-slate-200 text-slate-500 font-medium">Nenhum pagamento de folha registado neste período/cidade.</div>}
+        <h3 className="font-bold text-lg text-slate-800 mb-2 flex items-center gap-2">Categorias de: <span className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">{activeCityManager}</span></h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="p-6 border-t-4 border-t-emerald-500">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
+              <h3 className="font-bold text-lg text-emerald-700 flex items-center gap-2"><ArrowUpCircle size={20}/> Entradas</h3>
+              <button onClick={() => handleOpenCategoryModal('income')} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
+            </div>
+            <div className="space-y-2">
+              {sortedInc.map(cat => (
+                <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 border border-slate-100 transition-colors">
+                  <span className="font-medium text-slate-700">{cat}</span>
+                  {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleOpenCategoryModal('income', cat)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md"><Edit2 size={16}/></button>
+                      <button onClick={() => requestDeleteCategory(cat, 'income')} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card className="p-6 border-t-4 border-t-red-500">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
+              <h3 className="font-bold text-lg text-red-600 flex items-center gap-2"><ArrowDownCircle size={20}/> Saídas</h3>
+              <button onClick={() => handleOpenCategoryModal('expense')} className="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
+            </div>
+            <div className="space-y-2">
+              {sortedExp.map(cat => (
+                <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 border border-slate-100 transition-colors">
+                  <span className="font-medium text-slate-700">{cat}</span>
+                  {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleOpenCategoryModal('expense', cat)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md"><Edit2 size={16}/></button>
+                      <button onClick={() => requestDeleteCategory(cat, 'expense')} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
       </div>
     );
   };
 
-  const renderCategories = () => (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Cidades & Categorias</h2><p className="text-slate-500 mt-1">Crie filiais/cidades e organize categorias específicas para cada uma.</p></header>
-      
-      <div className="bg-slate-800 p-6 rounded-2xl shadow-sm text-white mb-8">
-         <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-lg flex items-center gap-2"><Building size={20}/> Cidades / Escritórios</h3>
-            <button onClick={() => setCityModal({isOpen: true, currentName: '', originalName: ''})} className="text-sm bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><Plus size={16}/> Nova Cidade</button>
-         </div>
-         <div className="flex flex-wrap gap-3">
-             {citiesList.map(city => (
-                 <div key={city} className={`flex items-center gap-2 px-4 py-2 rounded-xl border ${filterCity === city ? 'bg-emerald-500 border-emerald-500 text-white font-bold' : 'bg-slate-700/50 border-slate-600 hover:bg-slate-700 cursor-pointer text-slate-200'}`} onClick={() => setFilterCity(city)}>
-                     {city}
-                     <div className="flex gap-1 ml-2">
-                        <button onClick={(e) => { e.stopPropagation(); setCityModal({isOpen: true, currentName: city, originalName: city}); }} className="p-1 hover:text-emerald-300 transition-colors"><Edit2 size={14}/></button>
-                        <button onClick={(e) => { e.stopPropagation(); requestDeleteCity(city); }} className="p-1 hover:text-red-400 transition-colors"><Trash2 size={14}/></button>
-                     </div>
-                 </div>
-             ))}
-         </div>
-         <p className="text-xs text-slate-400 mt-4">* O sistema protege seus dados vinculando lançamentos antigos na cidade "Geral". Pode alterar o nome de qualquer cidade.</p>
-      </div>
-
-      <div className="flex items-center gap-2 mb-4 font-bold text-slate-700">Categorias de: <span className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">{filterCity === 'all' ? 'Todas (Mude a cidade acima)' : filterCity}</span></div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-100 transition-opacity">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-            <h3 className="font-bold text-lg text-emerald-700 flex items-center gap-2"><ArrowUpCircle size={20}/> Entradas</h3>
-            <button onClick={() => handleOpenCategoryModal('income')} className="text-sm bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
-          </div>
-          <div className="space-y-2">
-            {sortedIncomeCats.map(cat => (
-              <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="font-medium text-slate-700">{cat}</span>
-                {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleOpenCategoryModal('income', cat)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md"><Edit2 size={16}/></button>
-                    <button onClick={() => requestDeleteCategory(cat, 'income')} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-            <h3 className="font-bold text-lg text-red-600 flex items-center gap-2"><ArrowDownCircle size={20}/> Saídas</h3>
-            <button onClick={() => handleOpenCategoryModal('expense')} className="text-sm bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 flex items-center gap-1"><Plus size={16}/> Nova</button>
-          </div>
-          <div className="space-y-2">
-            {sortedExpenseCats.map(cat => (
-              <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="font-medium text-slate-700">{cat}</span>
-                {cat.toLowerCase() === 'outros' ? <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-slate-200 text-slate-500">Padrão</span> : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleOpenCategoryModal('expense', cat)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md"><Edit2 size={16}/></button>
-                    <button onClick={() => requestDeleteCategory(cat, 'expense')} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"><Trash2 size={16}/></button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-
   const renderPlans = () => {
+    const isAdmin = userProfile.email === ADMIN_EMAIL;
+    if (isAdmin) {
+      return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Meu Plano</h2></header>
+          <Card className="p-6 sm:p-8 max-w-3xl border-t-4 border-t-amber-400 bg-amber-50/30">
+            <div className="flex items-center justify-between border-b border-amber-200 pb-6 mb-6">
+                <div><p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1"><span className="material-symbols-outlined text-base">workspace_premium</span> Plano Atual</p><h3 className="text-3xl font-black text-slate-800">Admin</h3></div>
+                <div className="text-right"><span className="inline-block font-bold px-3 py-1 rounded-full text-sm bg-amber-100 text-amber-700">Ativo</span><p className="text-sm text-slate-500 mt-2 font-medium uppercase tracking-widest font-bold">Vitalício</p></div>
+            </div>
+            <div className="text-center py-8"><div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="material-symbols-outlined text-3xl">workspace_premium</span></div><h4 className="font-bold text-slate-800 text-xl mb-2">Conta de Administrador</h4><p className="text-slate-600">Acesso ilimitado a todo o sistema.</p></div>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">O Meu Plano</h2></header>
@@ -1172,17 +1297,17 @@ function DashboardApp({ userProfile }) {
           <div className="space-y-6">
               <h4 className="font-bold text-slate-800 text-lg">Conheça as opções</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`border-2 flex flex-col h-full rounded-xl p-5 relative transition-all ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white'}`}>
+                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Básico' || userProfile.plan === 'Free' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {(userProfile.plan === 'Básico' || userProfile.plan === 'Free') && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <h5 className="font-bold text-slate-800 text-xl mb-2">Plano Básico</h5>
-                  <p className="text-slate-500 text-sm mb-6">Lançamentos ilimitados diários e categorias personalizadas.</p>
-                  <Button variant="outline" className="w-full mt-auto bg-white" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Básico</h5>
+                  <p className="text-slate-500 text-sm mb-6 flex-1">Lançamentos ilimitados diários e categorias personalizadas.</p>
+                  <Button variant="outline" className="w-full bg-white mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Básico do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
-                <div className={`border-2 flex flex-col h-full rounded-xl p-5 relative transition-all ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white'}`}>
+                <div className={`border-2 rounded-xl p-5 relative transition-all flex flex-col h-full ${userProfile.plan === 'Pro' ? 'border-emerald-500 bg-emerald-50/20 shadow-md' : 'border-slate-200 bg-white hover:border-emerald-300'}`}>
                   {userProfile.plan === 'Pro' && <div className="absolute -top-3 right-4 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">Atual</div>}
-                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Vendido</div>
-                  <h5 className="font-bold text-slate-800 text-xl mb-2">Plano Pro</h5>
-                  <p className="text-slate-500 text-sm mb-6">Tudo do Básico + <b>Folha de Pagamento</b>, <b>Agendamentos</b> e <b>Multi-Cidades</b>.</p>
+                  <div className="absolute -top-3 left-4 bg-amber-400 text-slate-900 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Mais Completo</div>
+                  <h5 className="font-bold text-slate-800 text-xl mb-1">Plano Pro</h5>
+                  <p className="text-slate-500 text-sm mb-6 flex-1">Tudo do Básico + <b>Gestão de Contas a Pagar/Receber, Multi-Cidades e Folha de Pagamento</b>.</p>
                   <Button className="w-full mt-auto" onClick={() => window.open('https://wa.me/5564981005505?text=Olá, quero saber os valores e assinar o Plano Pro do LD Finanças!', '_blank')}>Consultar via WhatsApp</Button>
                 </div>
               </div>
@@ -1192,24 +1317,24 @@ function DashboardApp({ userProfile }) {
     );
   };
 
+  const renderSupport = () => (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto md:mx-0">
+      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Suporte e Ajuda</h2></header>
+      <Card className="bg-emerald-50/50 border border-emerald-100 p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
+          <div className="flex items-center gap-4"><div className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center shrink-0 text-white shadow-sm"><span className="material-symbols-outlined text-3xl">support_agent</span></div><div><h3 className="text-emerald-800 font-bold text-xl mb-1">Fale com um Humano</h3><p className="text-emerald-600/80 font-medium text-sm">Atendimento seg. a sex. das 09h às 18h</p></div></div>
+          <div className="w-full md:w-auto"><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
+        </div>
+      </Card>
+    </div>
+  );
+
   const renderTutorial = () => (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl">
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Como Funciona</h2></header>
       <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-900 relative">
-         <video controls preload="metadata" playsInline controlsList="nodownload" className="w-full h-auto aspect-video object-cover"><source src="https://ldsite.com.br/wp-content/uploads/2026/06/LD-FINANCAS-1.mp4" type="video/mp4" />O seu navegador não suporta a visualização do vídeo.</video>
+         <video controls preload="metadata" playsInline controlsList="nodownload" className="w-full h-auto aspect-video object-cover"><source src="https://ldsite.com.br/wp-content/uploads/2026/06/LD-FINANCAS-1.mp4" type="video/mp4" /></video>
       </div>
-    </div>
-  );
-
-  const renderSupport = () => (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl">
-      <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Suporte</h2></header>
-      <Card className="bg-emerald-50/50 border border-emerald-100 p-8 shadow-sm">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4"><div className="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center shrink-0 text-white shadow-sm"><span className="material-symbols-outlined text-3xl">support_agent</span></div><div><h3 className="text-emerald-800 font-bold text-xl mb-1">Fale com um Humano</h3><p className="text-emerald-600/80 font-medium text-sm">Atendimento comercial e técnico</p></div></div>
-          <div className="w-full md:w-auto"><a href="https://wa.me/5564981005505?text=Olá, preciso de suporte no LD Finanças." target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-colors"><span className="material-symbols-outlined">chat</span> Chamar Suporte</a></div>
-        </div>
-      </Card>
     </div>
   );
 
@@ -1218,18 +1343,21 @@ function DashboardApp({ userProfile }) {
       <header className="mb-6"><h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Painel Administrativo</h2></header>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto">
         <table className="w-full text-left border-collapse">
-          <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-bold text-slate-500"><th className="p-4 whitespace-nowrap">Usuário</th><th className="p-4 whitespace-nowrap">Plano</th><th className="p-4 whitespace-nowrap">Dias</th><th className="p-4 whitespace-nowrap">Ações</th></tr></thead>
+          <thead><tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-bold text-slate-500"><th className="p-4 whitespace-nowrap">Usuário</th><th className="p-4 whitespace-nowrap">WhatsApp</th><th className="p-4 whitespace-nowrap">Plano</th><th className="p-4 whitespace-nowrap">Dias</th><th className="p-4 whitespace-nowrap">Status</th><th className="p-4 whitespace-nowrap">Ações</th></tr></thead>
           <tbody className="text-sm">
             {adminUsers.map(user => {
               const isThisUserAdmin = user.email === ADMIN_EMAIL || user.plan === 'Admin';
               return (
-                <tr key={user.uid} className="border-b border-slate-50 hover:bg-slate-50/50">
+                <tr key={user.uid} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td className="p-4"><p className="font-bold text-slate-800 whitespace-nowrap">{user.name}</p><p className="text-slate-500 text-xs">{user.email}</p></td>
-                  <td className="p-4"><span className={`font-bold px-2 py-1 rounded text-xs uppercase shadow-sm ${isThisUserAdmin ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-700'}`}>{user.plan}</span></td>
-                  <td className="p-4 font-medium">{user.daysRemaining}</td>
+                  <td className="p-4 text-slate-500 whitespace-nowrap">{user.whatsapp || '-'}</td>
+                  <td className="p-4"><span className={`font-bold px-2 py-1 rounded text-xs uppercase shadow-sm ${isThisUserAdmin ? 'bg-slate-800 text-amber-400' : 'bg-slate-100 text-slate-700'}`}>{isThisUserAdmin ? 'Admin' : user.plan}</span></td>
+                  <td className="p-4 font-medium text-slate-800">{isThisUserAdmin || user.daysRemaining > 900 ? 'Vitalício' : `${user.daysRemaining} d`}</td>
+                  <td className="p-4">{user.status === 'Ativo' ? <span className="text-emerald-700 bg-emerald-50 font-bold px-2 py-1 rounded text-xs uppercase">Ativo</span> : <span className="text-red-700 bg-red-50 font-bold px-2 py-1 rounded text-xs uppercase">Bloqueado</span>}</td>
                   <td className="p-4 flex gap-2">
-                    <button onClick={() => handleToggleUserStatus(user)} disabled={isThisUserAdmin} className="p-2 border border-slate-200 rounded-lg">{user.status === 'Ativo' ? <Lock size={16} /> : <LockOpen size={16} />}</button>
-                    <button onClick={() => setAdminEditModal({isOpen: true, user: user, plan: user.plan || 'Free', daysRemaining: user.daysRemaining || 0})} className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Edit2 size={16}/></button>
+                    <button onClick={() => { const uRef = doc(db, 'artifacts', APP_ID, 'users', user.uid); setDoc(uRef, { status: user.status === 'Ativo' ? 'Bloqueado' : 'Ativo' }, { merge: true }); }} disabled={isThisUserAdmin} className="p-2 rounded-lg border bg-orange-50 text-orange-600 border-orange-200">{user.status === 'Ativo' ? <Lock size={16}/> : <LockOpen size={16}/>}</button>
+                    <button onClick={() => setAdminEditModal({isOpen: true, user: user, plan: user.plan || 'Free', daysRemaining: user.daysRemaining || 0})} className="p-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg"><Edit2 size={16}/></button>
+                    <button onClick={() => openConfirm('Excluir Cliente', `Excluir a conta de ${user.name}?`, async () => { await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid)); closeConfirm(); })} disabled={isThisUserAdmin} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded-lg"><Trash2 size={16}/></button>
                   </td>
                 </tr>
               )
@@ -1252,18 +1380,15 @@ function DashboardApp({ userProfile }) {
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex font-sans text-slate-900">
-      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm"><div className="flex items-center gap-2 font-black text-xl text-slate-800 tracking-tight"><div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-sm">LD</div>FINANÇAS</div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600 bg-slate-50 rounded-xl active:bg-slate-100">{isMobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}</button></div>
+      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-30 shadow-sm"><div className="flex items-center gap-2 font-black text-xl text-slate-800 tracking-tight"><div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-sm">LD</div>FINANÇAS</div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600 bg-slate-50 rounded-xl">{isMobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}</button></div>
+      
       <aside className={`fixed md:sticky top-0 left-0 h-[100dvh] w-72 bg-white border-r border-slate-200 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-6 hidden md:flex items-center gap-2 font-black text-2xl text-slate-800 tracking-tight border-b border-slate-100"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div>FINANÇAS</div>
         <div className="p-4 flex-1 space-y-1 overflow-y-auto mt-4 md:mt-0">
           <NavItem id="dashboard" icon={Home} label="Início" />
           <NavItem id="transactions" icon={Wallet} label="Lançamentos" />
-          {(userProfile.plan === 'Free' || userProfile.plan === 'Básico' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
-             <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" badge={urgentBillsCount} />
-          )}
-          {(userProfile.plan === 'Free' || userProfile.plan === 'Pro' || userProfile.plan === 'Admin' || userProfile.email === ADMIN_EMAIL) && (
-             <NavItem id="payroll" icon={People} label="Folha de Pagamento" />
-          )}
+          <NavItem id="payroll" icon={People} label="Folha de Pagamento" />
+          <NavItem id="bills" icon={Receipt} label="Contas Pagar/Receber" badge={urgentBillsCount} />
           <NavItem id="categories" icon={Building} label="Cidades & Categorias" />
           <NavItem id="plans" icon={CreditCard} label="Meu Plano" />
           <NavItem id="tutorial" icon={PlayCircle} label="Como Funciona" />
@@ -1271,8 +1396,8 @@ function DashboardApp({ userProfile }) {
           {userProfile.email === ADMIN_EMAIL && (<div className="pt-4 mt-4 border-t border-slate-100"><button onClick={() => { setCurrentView('admin'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${currentView === 'admin' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldAlert size={20} className={currentView === 'admin' ? 'text-white' : 'text-slate-400'} />Administração</button></div>)}
         </div>
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p><div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100"><span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'bg-slate-800 text-amber-400' : 'text-emerald-600 bg-emerald-50'}`}>{userProfile.email === ADMIN_EMAIL || userProfile.plan === 'Admin' ? 'Admin' : userProfile.plan}</span><span className="text-xs font-medium text-slate-500">{userProfile.email === ADMIN_EMAIL || userProfile.daysRemaining > 900 ? 'Vitalício' : `${userProfile.daysRemaining} dias`}</span></div></div>
-          <button type="button" onClick={handleLogout} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 hover:border-red-100 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"><p className="font-bold text-slate-800 text-sm truncate">{userProfile.name}</p><p className="text-xs text-slate-500 truncate mt-0.5">{userProfile.email}</p></div>
+          <button type="button" onClick={handleLogout} className="w-full mt-3 flex items-center justify-center gap-2 py-3 bg-white border border-slate-200 text-red-600 rounded-xl text-sm hover:bg-red-50 font-bold transition-colors"><LogOut size={16} /> Sair do Sistema</button>
         </div>
       </aside>
       {isMobileMenuOpen && (<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />)}
@@ -1282,15 +1407,20 @@ function DashboardApp({ userProfile }) {
           <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-white rounded-3xl border border-red-100 shadow-sm mt-10">
              <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6"><Lock size={40} /></div>
              <h2 className="text-2xl font-bold text-slate-800 mb-2">Acesso Bloqueado</h2>
-             <p className="text-slate-600 mb-8 max-w-md mx-auto">O seu plano expirou! A sua conta encontra-se temporariamente suspensa. Por favor, entre em contato com o suporte para renovar a sua assinatura e continuar a gerenciar as suas finanças.</p>
-             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={() => window.open('https://wa.me/5564981005505?text=Olá, a minha conta está bloqueada no LD Finanças e preciso de ajuda para renovar.', '_blank')} icon={HelpCircle}>Falar com Suporte</Button>
-                <Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair da Conta</Button>
-             </div>
+             <p className="text-slate-600 mb-8 max-w-md mx-auto">A sua conta encontra-se temporariamente suspensa. Fale com o suporte.</p>
+             <div className="flex flex-col sm:flex-row gap-4 justify-center"><Button onClick={() => window.open('https://wa.me/5564981005505', '_blank')} icon={HelpCircle}>Suporte</Button><Button onClick={handleLogout} variant="outline" icon={LogOut}>Sair</Button></div>
           </div>
         ) : (
           <>
-            {currentView === 'dashboard' && renderDashboard()}{currentView === 'transactions' && renderTransactions()}{currentView === 'bills' && renderBills()}{currentView === 'payroll' && renderPayroll()}{currentView === 'categories' && renderCategories()}{currentView === 'support' && renderSupport()}{currentView === 'plans' && renderPlans()}{currentView === 'tutorial' && renderTutorial()}{currentView === 'admin' && renderAdmin()}
+            {currentView === 'dashboard' && renderDashboard()}
+            {currentView === 'transactions' && renderTransactions()}
+            {currentView === 'payroll' && renderPayroll()}
+            {currentView === 'bills' && renderBills()}
+            {currentView === 'categories' && renderCategories()}
+            {currentView === 'support' && renderSupport()}
+            {currentView === 'plans' && renderPlans()}
+            {currentView === 'tutorial' && renderTutorial()}
+            {currentView === 'admin' && renderAdmin()}
           </>
         )}
       </main>
@@ -1312,20 +1442,47 @@ function DashboardApp({ userProfile }) {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">{formData.type === 'income' ? <ArrowUpCircle className="text-emerald-500"/> : <ArrowDownCircle className="text-red-500"/>}{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3><button onClick={handleCloseModal} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">{formData.type === 'income' ? <ArrowUpCircle className="text-emerald-500"/> : <ArrowDownCircle className="text-red-500"/>}{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3><button onClick={handleCloseModal} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button></div>
              <div className="p-6">
                 <form onSubmit={handleSaveTransaction}>
-                  <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${formData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>Entrada (+)</button><button type="button" onClick={() => handleTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${formData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>Saída (-)</button></div>
-                  <Select label="Cidade / Filial" name="city" value={formData.city} onChange={handleFormChange} required options={citiesList} />
-                  <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
-                  {formData.category.toLowerCase().includes('outros') && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300"><Input label="O que foi? (Breve descrição)" name="customDescription" value={formData.customDescription} onChange={handleFormChange} placeholder="Ex: Feira, Revista..." required /></div>
-                  )}
+                  <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => handleTypeToggle('income')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${formData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500'}`}>Entrada (+)</button><button type="button" onClick={() => handleTypeToggle('expense')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${formData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500'}`}>Saída (-)</button></div>
+                  <Select label="Cidade/Escritório" name="city" value={formData.city} onChange={handleFormChange} required options={citiesList} />
+                  <Select label="Categoria" name="category" value={formData.category} onChange={handleFormChange} required options={formData.type === 'income' ? sortCategories((categoriesByCity[formData.city] || {}).income) : sortCategories((categoriesByCity[formData.city] || {}).expense)} />
+                  {formData.category.toLowerCase().includes('outros') && <Input label="Descrição" name="customDescription" value={formData.customDescription} onChange={handleFormChange} placeholder="Ex: Feira..." required />}
                   <Input label="Valor (R$)" name="amount" type="text" inputMode="decimal" value={formData.amount} onChange={handleFormChange} placeholder="0,00" required />
                   <Select label="Forma de Pagamento" name="paymentMethod" value={formData.paymentMethod} onChange={handleFormChange} options={PAYMENT_METHODS} required />
                   <Input label="Data" name="date" type="date" value={formData.date} onChange={handleFormChange} required />
-                  <div className="mt-8 flex gap-3"><button type="button" onClick={handleCloseModal} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${formData.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>{editingId ? 'Salvar' : 'Confirmar'}</button></div>
+                  <div className="mt-8 flex gap-3"><button type="button" onClick={handleCloseModal} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${formData.type === 'income' ? 'bg-emerald-600' : 'bg-red-600'}`}>{editingId ? 'Salvar' : 'Confirmar'}</button></div>
+                </form>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {isPayrollModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsPayrollModalOpen(false)}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex justify-between z-20">
+                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><People className="text-blue-500"/> Lançar Pagamento</h3>
+                 <button onClick={() => setIsPayrollModalOpen(false)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button>
+             </div>
+             <div className="p-6">
+                <form onSubmit={handleSavePayroll}>
+                  <Input label="Nome do Funcionário" name="employeeName" value={payrollFormData.employeeName} onChange={e => setPayrollFormData({...payrollFormData, employeeName: e.target.value})} placeholder="Ex: João Silva" required />
+                  <Input label="Cargo / Função (Opcional)" name="role" value={payrollFormData.role} onChange={e => setPayrollFormData({...payrollFormData, role: e.target.value})} placeholder="Ex: Vendedor" />
+                  
+                  <Select label="Cidade / Filial" name="city" value={payrollFormData.city} onChange={e => setPayrollFormData({...payrollFormData, city: e.target.value})} required options={citiesList} />
+                  
+                  <Input label="Valor Pago (R$)" name="amount" type="text" inputMode="decimal" value={payrollFormData.amount} onChange={e => setPayrollFormData({...payrollFormData, amount: e.target.value})} placeholder="0,00" required />
+                  <Select label="Forma de Pagamento" name="paymentMethod" value={payrollFormData.paymentMethod} onChange={e => setPayrollFormData({...payrollFormData, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
+                  <Input label="Data do Pagamento" name="date" type="date" value={payrollFormData.date} onChange={e => setPayrollFormData({...payrollFormData, date: e.target.value})} required />
+                  
+                  <div className="mt-8 flex gap-3">
+                      <button type="button" onClick={() => setIsPayrollModalOpen(false)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button>
+                      <button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm bg-blue-600 hover:bg-blue-700">Registrar Pagamento</button>
+                  </div>
                 </form>
              </div>
           </div>
@@ -1335,146 +1492,86 @@ function DashboardApp({ userProfile }) {
       {isBillModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsBillModalOpen(false)}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex items-center justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Receipt className="text-slate-400"/> Novo Agendamento</h3><button onClick={() => setIsBillModalOpen(false)} className="p-2 text-slate-400 bg-slate-100 rounded-full"><X size={20}/></button></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 max-h-[90vh] overflow-y-auto">
+             <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex justify-between z-20"><h3 className="text-xl font-bold text-slate-800 flex gap-2"><Receipt className="text-slate-400"/> Agendamento</h3><button onClick={() => setIsBillModalOpen(false)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button></div>
              <form onSubmit={handleSaveBill} className="p-6">
-                <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => setBillFormData({...billFormData, type: 'income', category: sortedIncomeCats[0]})} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>A Receber (+)</button><button type="button" onClick={() => setBillFormData({...billFormData, type: 'expense', category: sortedExpenseCats[0]})} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${billFormData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>A Pagar (-)</button></div>
-                <Select label="Cidade / Filial" name="city" value={billFormData.city} onChange={handleBillFormChange} required options={citiesList} />
-                <Select label="Categoria" name="category" value={billFormData.category} onChange={handleBillFormChange} required options={billFormData.type === 'income' ? sortedIncomeCats : sortedExpenseCats} />
-                {billFormData.category.toLowerCase().includes('outros') && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300"><Input label="O que foi? (Breve descrição)" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} placeholder="Ex: Conta de Luz..." required /></div>
-                )}
-                <Input label="Valor Previsto (R$)" name="amount" type="text" inputMode="decimal" value={billFormData.amount} onChange={handleBillFormChange} placeholder="0,00" required />
+                <div className="flex bg-slate-100 p-1 rounded-xl mb-6"><button type="button" onClick={() => { setBillFormData(prev => ({...prev, type: 'income', category: sortCategories((categoriesByCity[prev.city] || {}).income)[0] || ''})) }} className={`flex-1 py-2 text-sm font-bold rounded-lg ${billFormData.type === 'income' ? 'bg-white shadow text-emerald-600' : 'text-slate-500'}`}>A Receber (+)</button><button type="button" onClick={() => { setBillFormData(prev => ({...prev, type: 'expense', category: sortCategories((categoriesByCity[prev.city] || {}).expense)[0] || ''})) }} className={`flex-1 py-2 text-sm font-bold rounded-lg ${billFormData.type === 'expense' ? 'bg-white shadow text-red-600' : 'text-slate-500'}`}>A Pagar (-)</button></div>
+                <Select label="Cidade/Escritório" name="city" value={billFormData.city} onChange={handleBillFormChange} required options={citiesList} />
+                <Select label="Categoria" name="category" value={billFormData.category} onChange={handleBillFormChange} required options={billFormData.type === 'income' ? sortCategories((categoriesByCity[billFormData.city]||{}).income) : sortCategories((categoriesByCity[billFormData.city]||{}).expense)} />
+                {billFormData.category.toLowerCase().includes('outros') && <Input label="Descrição" name="customDescription" value={billFormData.customDescription} onChange={handleBillFormChange} required />}
+                <Input label="Valor Previsto (R$)" name="amount" type="text" inputMode="decimal" value={billFormData.amount} onChange={handleBillFormChange} required />
                 <Input label="Data de Vencimento" name="dueDate" type="date" value={billFormData.dueDate} onChange={handleBillFormChange} required />
                 <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                   <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" name="isRecurring" checked={billFormData.isRecurring} onChange={handleBillFormChange} className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                      <span className="font-medium text-slate-700 text-sm">É um pagamento recorrente?</span>
-                   </label>
-                   {billFormData.isRecurring && (
-                      <div className="mt-4 pt-4 border-t border-slate-200 animate-in fade-in duration-300"><Input label="Repetir por quantos meses?" name="recurrenceMonths" type="number" min="2" value={billFormData.recurrenceMonths} onChange={handleBillFormChange} required={billFormData.isRecurring} /></div>
-                   )}
+                   <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" name="isRecurring" checked={billFormData.isRecurring} onChange={handleBillFormChange} className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" /><span className="font-medium text-slate-700 text-sm">Pagamento mensal recorrente?</span></label>
+                   {billFormData.isRecurring && <div className="mt-4 pt-4 border-t border-slate-200"><Input label="Por quantos meses?" name="recurrenceMonths" type="number" min="2" value={billFormData.recurrenceMonths} onChange={handleBillFormChange} required={billFormData.isRecurring} /></div>}
                 </div>
-                <div className="mt-8 flex gap-3"><button type="button" onClick={() => setIsBillModalOpen(false)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl text-white bg-slate-800 hover:bg-slate-900 shadow-sm">Agendar</button></div>
-             </form>
-          </div>
-        </div>
-      )}
-
-      {settleModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModal({...settleModal, isOpen: false})}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><CheckCircle className={settleModal.bill?.type === 'income' ? 'text-emerald-500' : 'text-red-500'} size={24}/>{settleModal.bill?.type === 'income' ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}</h3><button onClick={() => setSettleModal({...settleModal, isOpen: false})} className="p-2 text-slate-400 bg-slate-100 rounded-full"><X size={20}/></button></div>
-             <form onSubmit={handleSettleBillSubmit} className="p-6">
-                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100"><p className="text-sm font-bold text-slate-700 mb-1">Conta: <span className="font-medium text-slate-600">{settleModal.bill?.category}</span></p><p className="text-sm font-bold text-slate-700">Valor: <span className="font-medium text-slate-600">R$ {formatNumber(settleModal.bill?.amount)}</span></p></div>
-                <Select label="Forma de Pagamento" name="paymentMethod" value={settleModal.paymentMethod} onChange={(e) => setSettleModal({...settleModal, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
-                <Input label="Valor Final" name="paidAmount" type="text" inputMode="decimal" value={settleModal.paidAmount} onChange={(e) => setSettleModal({...settleModal, paidAmount: e.target.value})} placeholder="0,00" required />
-                <Input label="Data efetiva" name="paymentDate" type="date" value={settleModal.paymentDate} onChange={(e) => setSettleModal({...settleModal, paymentDate: e.target.value})} required />
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setSettleModal({...settleModal, isOpen: false})} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${settleModal.bill?.type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>Dar Baixa</button></div>
-             </form>
-          </div>
-        </div>
-      )}
-
-      {/* NOVO: Modal da Folha de Pagamento com Auto-Aprendizagem (CORRIGIDO) */}
-      {isPayrollModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsPayrollModalOpen(false)}></div>
-            <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-white p-6 border-b border-slate-100 flex justify-between z-20">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><People className="text-blue-500"/> Lançar Pagamento</h3>
-                    <button onClick={() => setIsPayrollModalOpen(false)} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button>
-                </div>
-                <div className="p-6">
-                    <form onSubmit={handleSavePayroll}>
-                        {!isNewEmployee && uniqueEmployeesList.length > 0 ? (
-                            <div className="flex flex-col gap-1.5 mb-4 w-full">
-                                <label className="text-sm font-medium text-slate-700">Selecionar Funcionário</label>
-                                <select 
-                                    value={payrollFormData.employeeName} 
-                                    onChange={(e) => {
-                                        if (e.target.value === 'NEW') {
-                                            setIsNewEmployee(true);
-                                            setPayrollFormData({...payrollFormData, employeeName: '', role: ''});
-                                        } else {
-                                            const pastEmp = payroll.find(p => p.employeeName === e.target.value);
-                                            setPayrollFormData({...payrollFormData, employeeName: e.target.value, role: pastEmp?.role || ''});
-                                        }
-                                    }}
-                                    className="border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50 focus:bg-white text-slate-800 appearance-none"
-                                    required
-                                >
-                                    {uniqueEmployeesList.map(emp => <option key={emp} value={emp}>{emp}</option>)}
-                                    <option value="NEW" className="font-bold text-blue-600">+ Cadastrar Novo Funcionário...</option>
-                                </select>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-1.5 mb-4 w-full animate-in fade-in duration-300">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-sm font-medium text-slate-700">Nome do Novo Funcionário</label>
-                                    {uniqueEmployeesList.length > 0 && (
-                                        <button type="button" onClick={() => {
-                                            setIsNewEmployee(false);
-                                            const firstEmp = uniqueEmployeesList[0];
-                                            setPayrollFormData({...payrollFormData, employeeName: firstEmp, role: payroll.find(p=>p.employeeName===firstEmp)?.role || ''});
-                                        }} className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                                            ← Escolher Existente
-                                        </button>
-                                    )}
-                                </div>
-                                <input type="text" name="employeeName" value={payrollFormData.employeeName} onChange={e => setPayrollFormData({...payrollFormData, employeeName: e.target.value})} placeholder="Ex: João Silva" required className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50 focus:bg-white text-slate-800" />
-                            </div>
-                        )}
-
-                        <Input label="Cargo / Função (Opcional)" name="role" value={payrollFormData.role} onChange={e => setPayrollFormData({...payrollFormData, role: e.target.value})} placeholder="Ex: Vendedor" />
-                        <Select label="Cidade / Filial" name="city" value={payrollFormData.city} onChange={e => setPayrollFormData({...payrollFormData, city: e.target.value})} required options={citiesList} />
-                        <Input label="Valor Pago (R$)" name="amount" type="text" inputMode="decimal" value={payrollFormData.amount} onChange={e => setPayrollFormData({...payrollFormData, amount: e.target.value})} placeholder="0,00" required />
-                        <Select label="Forma de Pagamento" name="paymentMethod" value={payrollFormData.paymentMethod} onChange={e => setPayrollFormData({...payrollFormData, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
-                        <Input label="Data do Pagamento" name="date" type="date" value={payrollFormData.date} onChange={e => setPayrollFormData({...payrollFormData, date: e.target.value})} required />
-                        
-                        <div className="mt-8 flex gap-3"><button type="button" onClick={() => setIsPayrollModalOpen(false)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm">Confirmar Pagamento</button></div>
-                    </form>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {categoryModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Tag className="text-slate-400" size={24}/>{categoryModal.originalName ? 'Editar Categoria' : 'Nova Categoria'}</h3><button onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveCategory} className="p-6">
-                <Input label="Nome da Categoria" name="currentName" value={categoryModal.currentName} onChange={(e) => setCategoryModal({...categoryModal, currentName: e.target.value})} placeholder="Ex: Aluguel" required />
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setCategoryModal({ ...categoryModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">{categoryModal.originalName ? 'Atualizar' : 'Salvar'}</button></div>
+                <div className="mt-8 flex gap-3"><button type="button" onClick={() => setIsBillModalOpen(false)} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl text-white bg-slate-800 shadow-sm">Agendar</button></div>
              </form>
           </div>
         </div>
       )}
 
       {cityModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCityModal({...cityModal, isOpen: false})}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 p-6">
+             <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Building className="text-slate-400"/>{cityModal.originalName ? 'Editar Cidade' : 'Nova Cidade'}</h3>
+             <form onSubmit={handleSaveCity}>
+                <Input label="Nome da Cidade / Filial" name="currentName" value={cityModal.currentName} onChange={e => setCityModal({...cityModal, currentName: e.target.value})} placeholder="Ex: Goiânia" required />
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setCityModal({...cityModal, isOpen: false})} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button type="submit" className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl">Salvar</button></div>
+             </form>
+          </div>
+        </div>
+      )}
+      
+      {categoryModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCategoryModal({...categoryModal, isOpen: false})}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 p-6">
+             <h3 className="text-xl font-bold text-slate-800 mb-4">{categoryModal.originalName ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+             <form onSubmit={handleSaveCategory}>
+                <Input label="Nome da Categoria" name="currentName" value={categoryModal.currentName} onChange={e => setCategoryModal({...categoryModal, currentName: e.target.value})} required />
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setCategoryModal({...categoryModal, isOpen: false})} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button type="submit" className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl">Salvar</button></div>
+             </form>
+          </div>
+        </div>
+      )}
+      
+      {settleModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCityModal({ ...cityModal, isOpen: false })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Building className="text-slate-400" size={24}/>{cityModal.originalName ? 'Editar Cidade' : 'Nova Cidade'}</h3><button onClick={() => setCityModal({ ...cityModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveCity} className="p-6">
-                <Input label="Nome da Cidade ou Filial" name="currentName" value={cityModal.currentName} onChange={(e) => setCityModal({...cityModal, currentName: e.target.value})} placeholder="Ex: São Paulo" required />
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setCityModal({ ...cityModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">{cityModal.originalName ? 'Atualizar' : 'Salvar'}</button></div>
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSettleModal({...settleModal, isOpen: false})}></div>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10">
+             <div className="p-6 border-b border-slate-100 flex justify-between"><h3 className="text-xl font-bold flex gap-2"><CheckCircle className={settleModal.bill?.type === 'income' ? 'text-emerald-500' : 'text-red-500'} size={24}/>{settleModal.bill?.type === 'income' ? 'Receber' : 'Pagar'}</h3><button onClick={() => setSettleModal({...settleModal, isOpen: false})} className="p-2 bg-slate-100 rounded-full"><X size={20}/></button></div>
+             <form onSubmit={handleSettleBillSubmit} className="p-6">
+                <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                   <p className="text-sm font-bold text-slate-700">Conta: <span className="font-medium text-slate-600">{settleModal.bill?.category}</span></p>
+                   <p className="text-sm font-bold text-slate-700">Cidade: <span className="font-medium text-slate-600">{settleModal.bill?.city || 'Geral'}</span></p>
+                   <p className="text-sm font-bold text-slate-700 mt-1">Valor Original: <span className="font-medium text-slate-600">R$ {formatNumber(settleModal.bill?.amount)}</span></p>
+                </div>
+                <Select label="Forma de Pagamento" name="paymentMethod" value={settleModal.paymentMethod} onChange={(e) => setSettleModal({...settleModal, paymentMethod: e.target.value})} options={PAYMENT_METHODS} required />
+                <Input label="Valor Final (R$)" name="paidAmount" type="text" inputMode="decimal" value={settleModal.paidAmount} onChange={(e) => setSettleModal({...settleModal, paidAmount: e.target.value})} required />
+                <Input label="Data efetiva" name="paymentDate" type="date" value={settleModal.paymentDate} onChange={(e) => setSettleModal({...settleModal, paymentDate: e.target.value})} required />
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setSettleModal({...settleModal, isOpen: false})} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700">Cancelar</button><button type="submit" className={`flex-1 py-3 px-4 font-bold rounded-xl text-white shadow-sm ${settleModal.bill?.type === 'income' ? 'bg-emerald-600' : 'bg-red-600'}`}>Dar Baixa no Caixa</button></div>
              </form>
           </div>
         </div>
       )}
 
       {adminEditModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-             <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Settings className="text-slate-400" size={24}/>Editar Plano</h3><button onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="p-2 text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button></div>
-             <form onSubmit={handleSaveAdminEdit} className="p-6">
-                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={[{ value: 'Free', label: 'Free' }, { value: 'Básico', label: 'Básico' }, { value: 'Pro', label: 'Pro' }, { value: 'Admin', label: 'Admin (Vitalício)' }]} required />
-                <Input label="Dias Restantes" name="daysRemaining" type="number" inputMode="numeric" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} placeholder="Ex: 30" required />
-                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button><button type="submit" className="flex-1 py-3 px-4 font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">Salvar Alterações</button></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })}></div>
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 p-6">
+             <h3 className="text-xl font-bold mb-4">Editar Cliente</h3>
+             <form onSubmit={async (e) => {
+                 e.preventDefault();
+                 let parsedDays = parseInt(adminEditModal.daysRemaining) || 0;
+                 const userRef = doc(db, 'artifacts', APP_ID, 'users', adminEditModal.user.uid);
+                 await setDoc(userRef, { plan: adminEditModal.plan, daysRemaining: parsedDays, status: parsedDays > 0 ? 'Ativo' : 'Bloqueado', lastDecrementDate: new Date().toISOString().split('T')[0] }, { merge: true });
+                 setAdminEditModal({ isOpen: false, user: null, plan: 'Free', daysRemaining: 30 });
+             }}>
+                <Select label="Novo Plano" name="plan" value={adminEditModal.plan} onChange={(e) => setAdminEditModal({...adminEditModal, plan: e.target.value})} options={[{value:'Free',label:'Free'},{value:'Básico',label:'Básico'},{value:'Pro',label:'Pro'},{value:'Admin',label:'Admin (Vitalício)'}]} required />
+                <Input label="Dias Restantes" name="daysRemaining" type="number" value={adminEditModal.daysRemaining} onChange={(e) => setAdminEditModal({...adminEditModal, daysRemaining: e.target.value})} required />
+                <div className="mt-6 flex gap-3"><button type="button" onClick={() => setAdminEditModal({ ...adminEditModal, isOpen: false })} className="flex-1 py-3 bg-slate-100 font-bold rounded-xl">Cancelar</button><button type="submit" className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl">Salvar</button></div>
              </form>
           </div>
         </div>
@@ -1483,12 +1580,12 @@ function DashboardApp({ userProfile }) {
       {confirmDialog.isOpen && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={closeConfirm}></div>
-            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 p-6 text-center">
+            <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl relative z-10 p-6 text-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${confirmDialog.isAlert ? 'bg-orange-100 text-orange-500' : 'bg-red-100 text-red-500'}`}><AlertTriangle size={32} /></div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">{confirmDialog.title}</h3><p className="text-slate-600 mb-8">{confirmDialog.message}</p>
               <div className="flex gap-3">
                 {!confirmDialog.isAlert && <button onClick={closeConfirm} className="flex-1 py-3 px-4 font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">Cancelar</button>}
-                <button onClick={confirmDialog.onConfirm} className={`flex-1 py-3 px-4 font-bold rounded-xl text-white transition-colors ${confirmDialog.isAlert ? 'bg-slate-800 hover:bg-slate-900' : 'bg-red-600 hover:bg-red-700'}`}>{confirmDialog.isAlert ? 'Entendi' : 'Confirmar'}</button>
+                <button onClick={confirmDialog.onConfirm} className={`flex-1 py-3 px-4 font-bold rounded-xl text-white ${confirmDialog.isAlert ? 'bg-slate-800' : 'bg-red-600'}`}>{confirmDialog.isAlert ? 'Entendi' : 'Confirmar'}</button>
               </div>
             </div>
          </div>
@@ -1511,66 +1608,31 @@ export default function App() {
         unsubProfile = onSnapshot(docRef, (docSnap) => {
            if(docSnap.exists()) {
               const userData = docSnap.data();
-              const today = new Date().toISOString().split('T')[0];
-              let updates = {};
-              let needsUpdate = false;
-
               if (user.email === ADMIN_EMAIL && userData.plan !== 'Admin') {
-                  updates.plan = 'Admin'; updates.daysRemaining = 999; needsUpdate = true;
-              }
-
-              if (user.email !== ADMIN_EMAIL && userData.plan !== 'Admin' && userData.daysRemaining > 0) {
-                  const lastCheck = userData.lastDecrementDate || userData.createdAt?.split('T')[0] || today;
-                  if (lastCheck !== today) {
-                      const daysPassed = Math.floor((new Date(today) - new Date(lastCheck)) / (1000 * 60 * 60 * 24));
-                      if (daysPassed > 0) {
-                          const newDays = Math.max(0, userData.daysRemaining - daysPassed);
-                          updates.daysRemaining = newDays;
-                          updates.lastDecrementDate = today;
-                          if (newDays === 0) updates.status = 'Bloqueado';
-                          needsUpdate = true;
-                      }
-                  }
-              }
-
-              if (needsUpdate) {
-                  setDoc(docRef, updates, { merge: true });
-                  setUserProfile({ uid: user.uid, ...userData, ...updates });
+                  setDoc(docRef, { plan: 'Admin', daysRemaining: 999 }, { merge: true });
+                  setUserProfile({ uid: user.uid, ...userData, plan: 'Admin', daysRemaining: 999 });
               } else {
                   setUserProfile({ uid: user.uid, ...userData });
               }
-           } else {
-              const isOwner = user.email === ADMIN_EMAIL;
-              const basicProfile = { 
-                  name: isOwner ? 'Paulo Sérgio Diniz' : 'Utilizador', email: user.email, 
-                  plan: isOwner ? 'Admin' : 'Free', daysRemaining: isOwner ? 999 : 30, 
-                  status: 'Ativo', createdAt: new Date().toISOString(), lastDecrementDate: new Date().toISOString().split('T')[0]
-              };
-              setDoc(docRef, basicProfile);
-              setUserProfile({ uid: user.uid, ...basicProfile });
            }
            setLoading(false);
         });
       } else {
         setUserProfile(null);
         setLoading(false);
-        if (unsubProfile) { unsubProfile(); unsubProfile = null; }
+        if (unsubProfile) unsubProfile();
       }
     });
-
     return () => { unsubscribe(); if (unsubProfile) unsubProfile(); };
   }, []);
 
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="text-emerald-600 font-bold text-xl animate-pulse flex items-center gap-2 mb-4">
-           <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div> A carregar...
-        </div>
+        <div className="text-emerald-600 font-bold text-xl animate-pulse flex items-center gap-2 mb-4"><div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg">LD</div> A carregar...</div>
       </div>
     );
   }
-
   if (!authUser || !userProfile) return <Auth />;
   return <DashboardApp userProfile={userProfile} />;
 }
