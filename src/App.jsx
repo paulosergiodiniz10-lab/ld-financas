@@ -854,7 +854,7 @@ function DashboardApp({ userProfile }) {
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
-  const handleExportPayrollPDF = () => {
+  const handleExportPayrollCSV = () => {
     if (filteredPayroll.length === 0) return;
     
     const total = filteredPayroll.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
@@ -864,80 +864,49 @@ function DashboardApp({ userProfile }) {
     if (filterPeriod === 'custom') periodName = `De ${formatDate(customDateStart)} até ${formatDate(customDateEnd)}`;
     if (filterPeriod === 'month') periodName = 'Mês Atual';
 
-    const printWindow = window.open('', '_blank');
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-        <head>
+    let excelHTML = `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
           <meta charset="utf-8">
-          <title>Folha de Pagamento - ${filterCity}</title>
           <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #1e293b; line-height: 1.5; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
-            .header h2 { margin: 0 0 10px 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
-            .header p { margin: 0; color: #64748b; font-size: 14px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
-            th, td { border: 1px solid #cbd5e1; padding: 12px; text-align: left; }
-            th { background-color: #f8fafc; font-weight: bold; color: #334155; text-transform: uppercase; font-size: 12px; }
-            tr:nth-child(even) { background-color: #f8fafc; }
-            .amount { text-align: right; font-weight: bold; color: #ef4444; }
-            .total-row { background-color: #f1f5f9 !important; font-weight: bold; font-size: 15px; }
-            .total-row td { text-align: right; border-top: 2px solid #94a3b8; }
-            .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; }
-            @media print {
-              @page { margin: 15mm; size: A4 portrait; }
-              body { padding: 0; }
-              .total-row { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; }
-              th { background-color: #e2e8f0 !important; -webkit-print-color-adjust: exact; }
-            }
+              table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+              th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+              .header { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; font-size: 16px; }
+              .sub-header { background-color: #f1f5f9; color: #334155; text-align: center; font-size: 12px; }
+              .section-title { font-weight: bold; text-align: center; color: white; margin-top: 20px; background-color: #3b82f6; }
+              .text-right { text-align: right; }
+              .text-red { color: #dc2626; }
+              .font-bold { font-weight: bold; }
+              .summary-row { font-weight: bold; background-color: #f8fafc; }
           </style>
-        </head>
-        <body>
-          <div class="header">
-            <h2>RELATÓRIO DE FOLHA DE PAGAMENTO</h2>
-            <p><strong>Empresa:</strong> ${userProfile?.name}</p>
-            <p><strong>Cidade/Filtro:</strong> ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | <strong>Período:</strong> ${periodName}</p>
-          </div>
+      </head>
+      <body>
           <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Funcionário</th>
-                <th>Cargo / Função</th>
-                <th>Cidade / Filial</th>
-                <th>Forma de Pagto</th>
-                <th style="text-align: right;">Valor Pago</th>
+              <tr><td colspan="6" class="header">RELATÓRIO DE FOLHA DE PAGAMENTO</td></tr>
+              <tr><td colspan="6" class="sub-header">Titular: ${userProfile?.name} | Cidade/Filtro: ${filterCity === 'all' ? 'Todas as Cidades' : filterCity} | Período: ${periodName}</td></tr>
+              <tr><td colspan="6"></td></tr>
+              <tr class="sub-header">
+                <td>Data</td><td>Funcionário</td><td>Cargo / Função</td><td>Cidade / Filial</td><td>Forma Pagto</td><td class="text-right">Valor Pago</td>
               </tr>
-            </thead>
-            <tbody>
-              ${filteredPayroll.map(p => `
-                <tr>
-                  <td>${formatDate(p.date)}</td>
-                  <td>${p.employeeName}</td>
-                  <td>${p.role || '-'}</td>
-                  <td>${p.city || 'Geral'}</td>
-                  <td>${p.paymentMethod}</td>
-                  <td class="amount">R$ ${formatNumber(p.amount)}</td>
-                </tr>
-              `).join('')}
-              <tr class="total-row">
-                <td colspan="5">TOTAL GASTO COM A FOLHA</td>
-                <td style="color: #ef4444;">R$ ${formatNumber(total)}</td>
-              </tr>
-            </tbody>
+    `;
+
+    filteredPayroll.forEach(p => {
+        excelHTML += `<tr><td>${formatDate(p.date)}</td><td>${p.employeeName}</td><td>${p.role || '-'}</td><td>${p.city || 'Geral'}</td><td>${p.paymentMethod}</td><td class="text-right text-red">R$ ${formatNumber(p.amount)}</td></tr>`;
+    });
+
+    excelHTML += `
+              <tr><td colspan="6"></td></tr>
+              <tr class="summary-row"><td colspan="5">TOTAL GASTO COM A FOLHA</td><td class="text-right text-red">R$ ${formatNumber(total)}</td></tr>
           </table>
-          <div class="footer">
-            <p>Relatório gerado pelo sistema LD Finanças SaaS em ${formatDate(new Date().toISOString().split('T')[0])}</p>
-          </div>
-        </body>
+      </body>
       </html>
     `;
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-    }, 300);
+
+    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url;
+    link.download = `Folha_Pagamento_${filterCity}_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
   const renderFilterBar = () => (
@@ -1172,7 +1141,7 @@ function DashboardApp({ userProfile }) {
                       <p className="text-slate-500 text-sm mt-1">Gestão de salários. Ao lançar, reflete no Caixa Principal.</p>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
-                      <Button onClick={handleExportPayrollPDF} variant="outline" className="bg-white text-slate-700 border-slate-200 hover:bg-slate-50" icon={PictureAsPdf}>Baixar Relatório (PDF)</Button>
+                      <Button onClick={handleExportPayrollCSV} variant="outline" className="bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50" icon={Download}>Baixar Folha (Excel)</Button>
                       <Button onClick={handleOpenPayrollModal} icon={Plus}>Novo Pagamento</Button>
                   </div>
               </header>
